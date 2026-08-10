@@ -16,18 +16,14 @@ class Task:
     def start(self) -> None:
         """Mark the task as in progress."""
         if self.status != TaskStatus.PENDING:
-            raise ValueError(
-                f"Cannot start task in status: {self.status}"
-            )
+            raise ValueError(f"Cannot start task in status: {self.status}")
 
         self.status = TaskStatus.IN_PROGRESS
 
     def complete(self) -> None:
         """Mark the task as completed."""
         if self.status != TaskStatus.IN_PROGRESS:
-            raise ValueError(
-                f"Cannot complete task in status: {self.status}"
-            )
+            raise ValueError(f"Cannot complete task in status: {self.status}")
 
         self.status = TaskStatus.COMPLETED
 

@@ -20,9 +20,7 @@ class Execution:
     def start(self) -> None:
         """Start execution."""
         if self.status != ExecutionStatus.PENDING:
-            raise ValueError(
-                f"Cannot start execution in status: {self.status}"
-            )
+            raise ValueError(f"Cannot start execution in status: {self.status}")
 
         self.status = ExecutionStatus.RUNNING
         self.started_at = datetime.now(UTC)
@@ -30,9 +28,7 @@ class Execution:
     def complete(self) -> None:
         """Complete execution."""
         if self.status != ExecutionStatus.RUNNING:
-            raise ValueError(
-                f"Cannot complete execution in status: {self.status}"
-            )
+            raise ValueError(f"Cannot complete execution in status: {self.status}")
 
         self.status = ExecutionStatus.COMPLETED
         self.completed_at = datetime.now(UTC)

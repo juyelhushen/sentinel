@@ -18,6 +18,5 @@ class Plan:
     def is_complete(self) -> bool:
         """Return whether every task has completed."""
         return bool(self.tasks) and all(
-            task.status.value == "completed"
-            for task in self.tasks
+            task.status.value == "completed" for task in self.tasks
         )

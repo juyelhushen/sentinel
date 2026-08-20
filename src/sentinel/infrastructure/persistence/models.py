@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS incidents (
 );
 """
 
+
 def initialize_database(connection: sqlite3.Connection) -> None:
     """Initialize the Sentinel database schema."""
     connection.executescript(SCHEMA)

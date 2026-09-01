@@ -5,6 +5,7 @@ description = "Autonomous Multi-Agent Engineering Ops Copilot"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
+    "ollama>=0.6.2",
     "pydantic-settings>=2.15.0",
 ]
 
@@ -24,6 +25,9 @@ build-backend = "uv_build"
 package = true
 
 [tool.pytest.ini_options]
+markers = [
+    "integration: tests requiring external infrastructure",
+]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]

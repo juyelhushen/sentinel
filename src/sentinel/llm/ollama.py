@@ -56,3 +56,16 @@ class OllamaProvider(LLMProvider):
             output_tokens=response.get("eval_count"),
             finish_reason=None,
         )
+
+    async def health_check(self) -> bool:
+        """Check if Ollama is available."""
+        try:
+            response = await asyncio.wait_for(
+                self._client.list(),
+                timeout=self._timeout_seconds,
+            )
+
+            return True;
+
+        except Exception:
+            return False

@@ -5,6 +5,7 @@ from sentinel.llm.models import LLMMessage, LLMRequest, LLMResponse
 
 
 class FakeLLMProvider(LLMProvider):
+
     def __init__(self, response: str) -> None:
         self._response = response
 
@@ -35,3 +36,8 @@ class FakeLLMProvider(LLMProvider):
         assert response.content == "Hello Sentinel"
         assert response.model == "fake-model"
         assert response.request_id == request.request_id
+
+
+    @pytest.mark.asyncio
+    async def health_check(self) -> bool:
+        return True

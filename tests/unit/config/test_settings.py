@@ -1,10 +1,10 @@
 from sentinel.config.settings import Settings
 
 
-def test_default_settings() -> None:
+def test_llm_settings_defaults() -> None:
     settings = Settings()
 
-    assert settings.app_name == "sentinel"
-    assert settings.environment == "development"
-    assert settings.log_level == "INFO"
-    assert settings.database_url == "sqlite:///./data/sentinel.db"
+    assert settings.llm_provider == "ollama"
+    assert settings.llm_model == "llama3.2"
+    assert settings.llm_base_url == "http://localhost:11434"
+    assert settings.llm_timeout_seconds == 60.0

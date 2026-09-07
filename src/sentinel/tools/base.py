@@ -14,7 +14,7 @@ class Tool(ABC):
     @property
     @abstractmethod
     def description(self) -> str:
-        """Return a description suitable for agent/tool discovery."""
+        """Return a description suitable for agents/tool discovery."""
 
     @abstractmethod
     async def execute(self, request: ToolRequest) -> ToolResult:

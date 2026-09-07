@@ -1,7 +1,6 @@
 import pytest
 
 from sentinel.agents.planner.models import InvestigationPlan
-from sentinel.domain.models import incident
 from sentinel.domain.models.incident import Incident
 from sentinel.workflows.sentinel_graph import create_sentinel_graph
 

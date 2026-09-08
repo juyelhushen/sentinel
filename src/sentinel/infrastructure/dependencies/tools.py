@@ -6,6 +6,7 @@ from sentinel.tools.filesystem.read_file import ReadFileTool
 from sentinel.tools.filesystem.search_files import SearchFilesTool
 from sentinel.tools.policy import ToolPolicy
 from sentinel.tools.registry import ToolRegistry
+from sentinel.tools.testing.run_tests import RunTestsTool
 
 
 def create_tool_executor(repository_root: Path) -> ToolExecutor:
@@ -17,12 +18,15 @@ def create_tool_executor(repository_root: Path) -> ToolExecutor:
 
     registry.register(ListDirectoryTool(repository_root))
 
+    registry.register(RunTestsTool(repository_root))
+
     registry.register(SearchFilesTool(repository_root))
 
     policy = ToolPolicy(
         allowed_tools={
             "read_file",
             "list_directory",
+            "run_tests",
             "search_files",
         }
     )

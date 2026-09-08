@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from sentinel.agents.planner.models import InvestigationPlan, PlanStep, PlanStepType
 
@@ -20,12 +21,14 @@ def parse_investigation_plan(
         summary = data["summary"]
         raw_steps = data["steps"]
 
+        if not isinstance(summary, str):
+            raise TypeError("Summary must be a string.")
+
+        if not isinstance(raw_steps, list):
+            raise TypeError("Steps must be a list.")
+
         steps = tuple(
-            PlanStep(
-                step_number=step["step_number"],
-                action=PlanStepType(step["action"]),
-                description=step["description"],
-            )
+            _parse_step(step)
             for step in raw_steps
         )
 
@@ -40,5 +43,24 @@ def parse_investigation_plan(
         ValueError,
     ) as exc:
         raise PlanParsingError(
-            "LLM response does not match the investigation plan schema."
+            "LLM response does not match " "the investigation plan schema."
         ) from exc
+
+
+def _parse_step(
+        step: dict[str, Any],
+) -> PlanStep:
+    """Parse a single investigation plan step."""
+    arguments = step.get("arguments", {})
+
+    if not isinstance(arguments, dict):
+        raise TypeError(
+        "Step arguments must be an object."
+    )
+
+    return PlanStep(
+        step_number=step["step_number"],
+        action=PlanStepType(step["action"]),
+        description=step["description"],
+        arguments=arguments,
+)

@@ -22,7 +22,5 @@ def map_plan_step_to_tool_request(
 
     return ToolRequest(
         tool_name=tool_name,
-        arguments={
-            "description": step.description,
-        },
+        arguments= step.arguments,
     )

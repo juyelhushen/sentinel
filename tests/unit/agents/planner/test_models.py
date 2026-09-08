@@ -1,4 +1,4 @@
-from sentinel.agents.planner.models import PlanStep, PlanStepType, InvestigationPlan
+from sentinel.agents.planner.models import InvestigationPlan, PlanStep, PlanStepType
 
 
 def test_investigation_plan_contains_steps() -> None:
@@ -16,3 +16,28 @@ def test_investigation_plan_contains_steps() -> None:
     assert plan.summary == "Investigate failing tests."
     assert len(plan.steps) == 1
     assert plan.steps[0].action == PlanStepType.RUN_TESTS
+
+
+def test_plan_step_defaults_to_empty_arguments() -> None:
+    step = PlanStep(
+        step_number=1,
+        action=PlanStepType.SEARCH_CODE,
+        description="Search authentication code.",
+    )
+
+    assert step.arguments == {}
+
+
+def test_plan_step_stores_arguments() -> None:
+    step = PlanStep(
+        step_number=1,
+        action=PlanStepType.SEARCH_CODE,
+        description="Search authentication code.",
+        arguments={
+            "query": "validate_token",
+        },
+    )
+
+    assert step.arguments == {
+        "query": "validate_token",
+    }

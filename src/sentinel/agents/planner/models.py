@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class PlanStepType(str, Enum):
@@ -18,6 +19,9 @@ class PlanStep:
     step_number: int
     action: PlanStepType
     description: str
+    arguments: dict[str, Any] = field(
+        default_factory=dict,
+    )
 
 
 @dataclass(frozen=True)

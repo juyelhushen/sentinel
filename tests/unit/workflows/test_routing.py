@@ -17,7 +17,7 @@ def test_route_after_planning_returns_end_on_success() -> None:
         }
     )
 
-    assert result == "end"
+    assert result == "investigator"
 
 def test_route_after_planning_returns_error_on_failure() -> None:
     incident = Incident(

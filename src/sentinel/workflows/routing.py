@@ -9,4 +9,4 @@ def route_after_planning(
     if state["error"] is not None:
         return "error";
 
-    return "end";
+    return "investigator";

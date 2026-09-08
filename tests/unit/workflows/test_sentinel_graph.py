@@ -1,5 +1,6 @@
 import pytest
 
+from sentinel.agents.investigator.models import InvestigationResult
 from sentinel.agents.planner.models import InvestigationPlan
 from sentinel.domain.models.incident import Incident
 from sentinel.workflows.sentinel_graph import create_sentinel_graph
@@ -18,10 +19,24 @@ class FakePlannerAgent:
             steps=(),
         )
 
+class FakeInvestigatorAgent:
+    """Fake investigator agents for graph tests"""
+
+    async def investigate(
+            self,
+            plan: InvestigationPlan
+    ) -> InvestigationResult:
+
+        return InvestigationResult(
+            summary=f"Investigated: {plan.summary}",
+            step_results=(),
+        )
+
 @pytest.mark.asyncio
 async def test_sentinel_graph_runs() -> None:
     graph = create_sentinel_graph(
         planner_agent=FakePlannerAgent(),
+        investigator_agent=FakeInvestigatorAgent(),
     )
 
     incident = Incident(
@@ -34,6 +49,7 @@ async def test_sentinel_graph_runs() -> None:
         {
             "incident": incident,
             'plan': None,
+            "investigation": None,
             "error": None
         }
     )
@@ -55,6 +71,7 @@ class FailingPlannerAgent:
 async def test_sentinel_graph_handles_planner_failure() -> None:
     graph = create_sentinel_graph(
         planner_agent=FailingPlannerAgent(),
+        investigator_agent=FakeInvestigatorAgent(),
     )
 
     incident = Incident(

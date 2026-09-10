@@ -7,6 +7,6 @@ def route_after_planning(
     """Determine where the workflow goes after planning"""
 
     if state["error"] is not None:
-        return "error";
+        return "fail_execution"
 
-    return "investigator";
+    return "investigator"

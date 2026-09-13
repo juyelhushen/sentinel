@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from sentinel.agents.planner.models import PlanStepType
 
+
 @dataclass(frozen=True)
 class StepInvestigationResult:
     """Result of investigation a single plan step"""
@@ -10,6 +11,7 @@ class StepInvestigationResult:
     action: PlanStepType
     success: bool
     findings: str
+
 
 @dataclass(frozen=True)
 class InvestigationResult:

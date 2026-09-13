@@ -2,12 +2,10 @@ from sentinel.domain.enums.execution_status import ExecutionStatus
 from sentinel.workflows.graph_state import SentinelGraphState
 
 
-def execution_complete_node(
-        state: SentinelGraphState
-) -> dict :
+def execution_complete_node(state: SentinelGraphState) -> dict:
     """Complete the current execution."""
 
-    execution = state['execution']
+    execution = state["execution"]
 
     if execution is None:
         raise ValueError("Cannot complete workflow without an execution.")

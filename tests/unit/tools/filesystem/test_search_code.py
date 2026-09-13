@@ -13,10 +13,7 @@ async def test_search_code_finds_matching_lines(
     source_file = tmp_path / "service.py"
 
     source_file.write_text(
-        "def validate_token():\n"
-        "    return True\n"
-        "\n"
-        "validate_token()\n",
+        "def validate_token():\n    return True\n\nvalidate_token()\n",
         encoding="utf-8",
     )
 

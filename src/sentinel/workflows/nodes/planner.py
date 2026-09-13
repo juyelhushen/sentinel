@@ -9,18 +9,10 @@ def create_planner_node(planner_agent: PlannerAgent):
         """Generate an investigation plan."""
 
         try:
-            plan = await planner_agent.plan(
-                state["incident"]
-            )
+            plan = await planner_agent.plan(state["incident"])
 
-            return {
-                "plan": plan,
-                "error": None
-            }
+            return {"plan": plan, "error": None}
         except Exception as exc:
-            return {
-                "plan": None,
-                "error": str(exc)
-            }
+            return {"plan": None, "error": str(exc)}
 
     return planner_node

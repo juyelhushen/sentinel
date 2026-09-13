@@ -2,7 +2,7 @@ import pytest
 
 from sentinel.config.settings import get_settings
 from sentinel.llm.exceptions import LLMConnectionError
-from sentinel.llm.models import LLMRequest, LLMMessage
+from sentinel.llm.models import LLMMessage, LLMRequest
 from sentinel.llm.ollama import OllamaProvider
 
 
@@ -24,6 +24,7 @@ async def test_ollama_provider_maps_connection_errors() -> None:
 
     with pytest.raises(LLMConnectionError):
         await provider.generate(request)
+
 
 @pytest.mark.asyncio
 @pytest.mark.integration

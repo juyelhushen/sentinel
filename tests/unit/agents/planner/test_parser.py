@@ -31,13 +31,12 @@ def test_parse_investigation_plan() -> None:
     assert plan.summary == "Investigate failing tests"
     assert len(plan.steps) == 2
     assert plan.steps[0].action == PlanStepType.RUN_TESTS
-    
+
 
 def test_parse_investigation_plan_rejects_invalid_json() -> None:
     with pytest.raises(PlanParsingError):
-        parse_investigation_plan(
-            "This is not JSON."
-        )
+        parse_investigation_plan("This is not JSON.")
+
 
 def test_parse_investigation_plan_rejects_invalid_action() -> None:
     content = """

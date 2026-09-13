@@ -6,18 +6,19 @@ from sentinel.domain.models.incident import Incident
 from sentinel.workflows.nodes.investigator import create_investigator_node
 
 
-
 class FakeInvestigatorAgent:
     """Fake investigator agent for graph tests."""
+
     async def investigate(
-            self,
-            plan: InvestigationPlan,
+        self,
+        plan: InvestigationPlan,
     ) -> InvestigationResult:
 
         return InvestigationResult(
             summary=f"Investigated: {plan.summary}",
             step_results=(),
         )
+
 
 @pytest.mark.asyncio
 async def test_investigator_node_adds_investigation() -> None:
@@ -30,7 +31,7 @@ async def test_investigator_node_adds_investigation() -> None:
     incident = Incident(
         title="Test are failing",
         description="Several tests are failing",
-        repository="sentinel"
+        repository="sentinel",
     )
 
     plan = InvestigationPlan(
@@ -52,6 +53,7 @@ async def test_investigator_node_adds_investigation() -> None:
     )
 
     assert result["error"] is None
+
 
 @pytest.mark.asyncio
 async def test_investigator_node_rejects_missing_plan() -> None:
@@ -75,6 +77,4 @@ async def test_investigator_node_rejects_missing_plan() -> None:
     )
 
     assert result["investigation"] is None
-    assert result["error"] == (
-        "Cannot investigate without a plan."
-    )
+    assert result["error"] == ("Cannot investigate without a plan.")

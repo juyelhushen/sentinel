@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 from uuid import UUID
 
 from sentinel.application.ports.incident_repository import (
@@ -16,11 +17,11 @@ class SQLiteIncidentRepository(IncidentRepository):
         self._connection = connection
 
     def save(self, incident: Incident) -> None:
-        """Persist an incident."""
+        """Insert or update an incident."""
 
         self._connection.execute(
             """
-            INSERT OR REPLACE INTO incidents (
+            INSERT INTO incidents (
                 id,
                 title,
                 description,
@@ -30,6 +31,12 @@ class SQLiteIncidentRepository(IncidentRepository):
                 updated_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                description = excluded.description,
+                repository = excluded.repository,
+                status = excluded.status,
+                updated_at = excluded.updated_at
             """,
             (
                 str(incident.id),
@@ -45,7 +52,7 @@ class SQLiteIncidentRepository(IncidentRepository):
         self._connection.commit()
 
     def get(self, incident_id: UUID) -> Incident | None:
-        """Retrieve an incident."""
+        """Retrieve an incident by ID."""
 
         row = self._connection.execute(
             """

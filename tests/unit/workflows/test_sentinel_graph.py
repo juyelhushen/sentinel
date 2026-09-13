@@ -9,28 +9,24 @@ from sentinel.workflows.sentinel_graph import create_sentinel_graph
 class FakePlannerAgent:
     """Fake planner agents for graph tests"""
 
-    async def plan(
-            self,
-            incident: Incident
-    ) -> InvestigationPlan:
+    async def plan(self, incident: Incident) -> InvestigationPlan:
 
         return InvestigationPlan(
             summary=f"Plan for: {incident.title}",
             steps=(),
         )
 
+
 class FakeInvestigatorAgent:
     """Fake investigator agents for graph tests"""
 
-    async def investigate(
-            self,
-            plan: InvestigationPlan
-    ) -> InvestigationResult:
+    async def investigate(self, plan: InvestigationPlan) -> InvestigationResult:
 
         return InvestigationResult(
             summary=f"Investigated: {plan.summary}",
             step_results=(),
         )
+
 
 @pytest.mark.asyncio
 async def test_sentinel_graph_runs() -> None:
@@ -46,23 +42,19 @@ async def test_sentinel_graph_runs() -> None:
     )
 
     result = await graph.ainvoke(
-        {
-            "incident": incident,
-            'plan': None,
-            "investigation": None,
-            "error": None
-        }
+        {"incident": incident, "plan": None, "investigation": None, "error": None}
     )
 
-    assert result["plan"].summary == ( "Plan for: Tests are failing" )
+    assert result["plan"].summary == ("Plan for: Tests are failing")
     assert result["error"] is None
+
 
 class FailingPlannerAgent:
     """Planner agent that always fails."""
 
     async def plan(
-            self,
-            incident: Incident,
+        self,
+        incident: Incident,
     ) -> InvestigationPlan:
         raise RuntimeError("LLM is unavailable")
 

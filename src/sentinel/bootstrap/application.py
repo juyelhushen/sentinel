@@ -9,9 +9,9 @@ from sentinel.workflows.sentinel_graph import create_sentinel_graph
 
 
 def create_sentinel_application(
-        *,
-        llm_provider: LLMProvider,
-        repository_root: Path,
+    *,
+    llm_provider: LLMProvider,
+    repository_root: Path,
 ) -> Any:
     """Create the complete Sentinel application."""
 

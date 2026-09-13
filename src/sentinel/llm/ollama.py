@@ -65,7 +65,6 @@ class OllamaProvider(LLMProvider):
                 timeout=self._timeout_seconds,
             )
 
-            return True;
-
+            return True
         except Exception:
             return False

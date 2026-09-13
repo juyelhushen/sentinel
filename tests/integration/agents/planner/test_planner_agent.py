@@ -5,6 +5,7 @@ from sentinel.config.settings import get_settings
 from sentinel.domain.models.incident import Incident
 from sentinel.llm.ollama import OllamaProvider
 
+
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_planner_agent_creates_real_investigation_plan() -> None:

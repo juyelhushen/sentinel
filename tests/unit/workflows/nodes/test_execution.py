@@ -5,10 +5,10 @@ from sentinel.workflows.nodes.execution import execution_start_node
 
 def test_execution_start_node_creates_running_execution() -> None:
 
-    incident= Incident(
+    incident = Incident(
         title="Tests are failing",
         description="Several tests are failing",
-        repository="sentinel"
+        repository="sentinel",
     )
 
     result = execution_start_node(

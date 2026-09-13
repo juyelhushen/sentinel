@@ -17,6 +17,5 @@ def execution_fail_node(state: SentinelGraphState) -> dict:
 
     return {
         "execution": execution,
-        "error": state['error'],
+        "error": state["error"],
     }
-

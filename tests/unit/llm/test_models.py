@@ -1,4 +1,4 @@
-from sentinel.llm.models import LLMRequest, LLMMessage, LLMResponse
+from sentinel.llm.models import LLMMessage, LLMRequest, LLMResponse
 
 
 def test_llm_request_generates_request_id() -> None:

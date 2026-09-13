@@ -1,4 +1,4 @@
-from langgraph.constants import START, END
+from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 
 from sentinel.agents.investigator.agent import InvestigatorAgent
@@ -14,14 +14,12 @@ from sentinel.workflows.routing import route_after_planning
 
 
 def create_sentinel_graph(
-        planner_agent: PlannerAgent,
-        investigator_agent: InvestigatorAgent,
+    planner_agent: PlannerAgent,
+    investigator_agent: InvestigatorAgent,
 ):
     """Create Sentinel's LangGraph workflow."""
 
-    graph = StateGraph(
-        SentinelGraphState
-    )
+    graph = StateGraph(SentinelGraphState)
 
     graph.add_node(
         "execution_start",
@@ -33,24 +31,24 @@ def create_sentinel_graph(
         create_planner_node(planner_agent),
     )
 
-    graph.add_node(
-        "investigator",
-        create_investigator_node(investigator_agent)
-    )
+    graph.add_node("investigator", create_investigator_node(investigator_agent))
 
     graph.add_node(
         "execution_complete",
         execution_complete_node,
     )
 
-    graph.add_node(
-        "error",
-        error_node
+    graph.add_node("error", error_node)
+
+    graph.add_edge(
+        START,
+        "execution_start",
     )
 
-    graph.add_edge( START, "execution_start", )
-
-    graph.add_edge( "execution_start", "planner", )
+    graph.add_edge(
+        "execution_start",
+        "planner",
+    )
 
     graph.add_node(
         "fail_execution",
@@ -62,7 +60,7 @@ def create_sentinel_graph(
         route_after_planning,
         {
             "investigator": "investigator",
-            "error": "error"
+            "fail_execution": "fail_execution",
         },
     )
 
@@ -76,9 +74,6 @@ def create_sentinel_graph(
         END,
     )
 
-    graph.add_edge(
-        "error",
-        END
-    )
+    graph.add_edge("error", END)
 
     return graph.compile()

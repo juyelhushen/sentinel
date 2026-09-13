@@ -9,8 +9,8 @@ class FakeToolExecutor:
     """Fake tool executor for InvestigatorAgent tests."""
 
     def __init__(
-            self,
-            results: list[ToolResult],
+        self,
+        results: list[ToolResult],
     ) -> None:
         self._results = results
         self.requests: list[object] = []
@@ -19,17 +19,14 @@ class FakeToolExecutor:
         self.requests.append(request)
         return self._results.pop(0)
 
+
 @pytest.mark.asyncio
 async def test_investigator_agent_executes_plan() -> None:
     executor = FakeToolExecutor(
         results=[
+            ToolResult(status=ToolExecutionStatus.SUCCESS, output="Tests passed"),
             ToolResult(
-                status=ToolExecutionStatus.SUCCESS,
-                output="Tests passed"
-            ),
-            ToolResult(
-                status=ToolExecutionStatus.SUCCESS,
-                output="File contents found"
+                status=ToolExecutionStatus.SUCCESS, output="File contents found"
             ),
         ]
     )
@@ -44,12 +41,12 @@ async def test_investigator_agent_executes_plan() -> None:
             PlanStep(
                 step_number=1,
                 action=PlanStepType.RUN_TESTS,
-                description="Run the tests"
+                description="Run the tests",
             ),
             PlanStep(
                 step_number=2,
                 action=PlanStepType.INSPECT_FILE,
-                description="Inspect the source file"
+                description="Inspect the source file",
             ),
         ),
     )
@@ -62,13 +59,13 @@ async def test_investigator_agent_executes_plan() -> None:
     assert result.step_results[0].findings == "Tests passed."
 
     assert result.step_results[1].success is True
-    assert result.step_results[1].findings == ( "File contents found." )
+    assert result.step_results[1].findings == ("File contents found.")
 
     assert len(executor.requests) == 2
     assert executor.requests[0].tool_name == "run_tests"
     assert executor.requests[1].tool_name == "read_file"
 
-    
+
 @pytest.mark.asyncio
 async def test_investigator_agent_records_failed_tool() -> None:
     executor = FakeToolExecutor(
@@ -103,9 +100,7 @@ async def test_investigator_agent_records_failed_tool() -> None:
 
 @pytest.mark.asyncio
 async def test_investigator_agent_handles_empty_plan() -> None:
-    executor = FakeToolExecutor(
-        results=[]
-    )
+    executor = FakeToolExecutor(results=[])
 
     agent = InvestigatorAgent(
         tool_executor=executor,
@@ -119,8 +114,6 @@ async def test_investigator_agent_handles_empty_plan() -> None:
     result = await agent.investigate(plan)
 
     assert result.step_results == ()
-    assert result.summary == (
-        "No investigation steps were executed."
-    )
+    assert result.summary == ("No investigation steps were executed.")
 
     assert executor.requests == []

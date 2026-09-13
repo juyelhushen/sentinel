@@ -41,8 +41,7 @@ async def test_create_tool_executor_registers_search_code_tool(
     file_path = tmp_path / "example.py"
 
     file_path.write_text(
-        "def validate_token():\n"
-        "    return True\n",
+        "def validate_token():\n    return True\n",
         encoding="utf-8",
     )
 
@@ -90,6 +89,4 @@ async def test_create_tool_executor_registers_run_tests_tool(
     )
 
     assert result.status == ToolExecutionStatus.FAILURE
-    assert result.error == (
-        "Test path does not exist: missing_tests"
-    )
+    assert result.error == ("Test path does not exist: missing_tests")

@@ -1,5 +1,3 @@
-from urllib import response
-
 from sentinel.agents.planner.models import InvestigationPlan
 from sentinel.agents.planner.parser import parse_investigation_plan
 from sentinel.agents.planner.prompt import build_planner_prompt
@@ -21,12 +19,9 @@ class PlannerAgent:
         """Create an investigation plan for an incident."""
 
         prompt = build_planner_prompt(incident)
- 
-        request = LLMRequest(
-            messages=prompt.to_message(),
-            temperature=0.0
-        )
+
+        request = LLMRequest(messages=prompt.to_message(), temperature=0.0)
 
         response = await self.llm_provider.generate(request)
 
-        return parse_investigation_plan( response.content )
+        return parse_investigation_plan(response.content)

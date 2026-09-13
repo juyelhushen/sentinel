@@ -8,10 +8,7 @@ from sentinel.tools.registry import ToolRegistry
 from sentinel.tools.testing.run_tests import RunTestsTool
 
 
-def create_tool_executor(
-        repository_root: Path
-)-> ToolExecutor:
-
+def create_tool_executor(repository_root: Path) -> ToolExecutor:
     """Create configured sentinel tool executor."""
 
     registry = ToolRegistry()
@@ -34,7 +31,7 @@ def create_tool_executor(
         )
     )
 
-    policy= ToolPolicy(
+    policy = ToolPolicy(
         allowed_tools={
             "read_file",
             "search_code",
@@ -46,4 +43,3 @@ def create_tool_executor(
         registry=registry,
         policy=policy,
     )
-

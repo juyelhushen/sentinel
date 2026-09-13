@@ -23,6 +23,7 @@ class FakeLLMProvider(LLMProvider):
     async def health_check(self) -> bool:
         return True
 
+
 @pytest.mark.asyncio
 async def test_planner_agent_creates_structured_plan() -> None:
     provider = FakeLLMProvider(
@@ -46,27 +47,27 @@ async def test_planner_agent_creates_structured_plan() -> None:
     incident = Incident(
         title="Tests are failing",
         description="Tests started failing after a recent change.",
-        repository="sentinel", )
+        repository="sentinel",
+    )
     plan = await agent.plan(incident)
 
     assert plan.summary == "Investigate failing tests"
     assert len(plan.steps) == 1
     assert plan.steps[0].action.value == "run_tests"
 
+
 @pytest.mark.asyncio
 async def test_planner_agent_rejects_invalid_llm_response() -> None:
-    provider = FakeLLMProvider(
-        response_content="This is not valid JSON."
-    )
+    provider = FakeLLMProvider(response_content="This is not valid JSON.")
 
     agent = PlannerAgent(
-    llm_provider=provider,
+        llm_provider=provider,
     )
 
     incident = Incident(
-    title="Tests are failing",
-    description="Tests started failing after a recent change.",
-    repository="sentinel",
+        title="Tests are failing",
+        description="Tests started failing after a recent change.",
+        repository="sentinel",
     )
 
     with pytest.raises(PlanParsingError):

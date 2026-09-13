@@ -24,8 +24,8 @@ class InvestigatorAgent:
         self._tool_executor = tool_executor
 
     async def investigate(
-            self,
-            plan: InvestigationPlan,
+        self,
+        plan: InvestigationPlan,
     ) -> InvestigationResult:
         """Execute an investigation plan"""
 
@@ -46,7 +46,7 @@ class InvestigatorAgent:
                     findings=self._build_findings(
                         step.action,
                         tool_result=tool_result,
-                    )
+                    ),
                 )
             )
 
@@ -55,11 +55,10 @@ class InvestigatorAgent:
             step_results=tuple(steps_results),
         )
 
-
     @staticmethod
     def _build_findings(
-            step_action: PlanStepType,
-            tool_result: ToolResult,
+        step_action: PlanStepType,
+        tool_result: ToolResult,
     ) -> str:
         """Convert a tool result into investigation findings."""
 
@@ -90,15 +89,10 @@ class InvestigatorAgent:
         if not step_results:
             return "No investigation steps were executed."
 
-        successful_steps = sum(
-            result.success
-            for result in step_results
-        )
+        successful_steps = sum(result.success for result in step_results)
 
         return (
             f"Investigation completed: "
             f"{successful_steps}/{len(step_results)} "
             f"steps succeeded."
         )
-
-

@@ -35,10 +35,7 @@ def test_planner_prompt_describes_tool_arguments() -> None:
 
     messages = prompt.to_message()
 
-    content = "\n".join(
-        message.content
-        for message in messages
-    )
+    content = "\n".join(message.content for message in messages)
 
     assert "inspect_file" in content
     assert "search_code" in content

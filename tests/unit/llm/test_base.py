@@ -1,7 +1,7 @@
 import pytest
 
 from sentinel.llm.base import LLMProvider
-from sentinel.llm.models import LLMRequest, LLMResponse, LLMMessage
+from sentinel.llm.models import LLMMessage, LLMRequest, LLMResponse
 
 
 class FakeLLMProvider(LLMProvider):

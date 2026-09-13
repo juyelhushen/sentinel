@@ -8,6 +8,7 @@ _ACTION_TO_TOOL: dict[str, str] = {
     "analyze_logs": "analyze_logs",
 }
 
+
 def map_plan_step_to_tool_request(
     step: PlanStep,
 ) -> ToolRequest:
@@ -22,5 +23,5 @@ def map_plan_step_to_tool_request(
 
     return ToolRequest(
         tool_name=tool_name,
-        arguments= step.arguments,
+        arguments=step.arguments,
     )

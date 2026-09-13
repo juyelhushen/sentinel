@@ -81,10 +81,7 @@ class RunTestsTool(Tool):
         combined_output = output
 
         if error_output:
-            combined_output += (
-                "\nSTDERR:\n"
-                f"{error_output}"
-            )
+            combined_output += f"\nSTDERR:\n{error_output}"
 
         if process.returncode == 0:
             return ToolResult(
@@ -104,7 +101,4 @@ class RunTestsTool(Tool):
         self,
         path: Path,
     ) -> bool:
-        return (
-            path == self._repository_root
-            or self._repository_root in path.parents
-        )
+        return path == self._repository_root or self._repository_root in path.parents

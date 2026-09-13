@@ -1,7 +1,6 @@
 import pytest
 
 from sentinel.agents.planner.models import InvestigationPlan
-from sentinel.domain.models import incident
 from sentinel.domain.models.incident import Incident
 from sentinel.workflows.nodes.planner import create_planner_node
 
@@ -10,24 +9,27 @@ class FakePlannerAgent:
     """Fake planner agent for workflow tests."""
 
     async def plan(
-            self,
-            incident: Incident,
-    )-> InvestigationPlan:
+        self,
+        incident: Incident,
+    ) -> InvestigationPlan:
 
         return InvestigationPlan(
             summary=f"Investigate: {incident.title}",
             steps=(),
         )
 
+
 class FailingPlannerAgent:
     """Planner agent that always fails"""
+
     async def plan(
-            self,
-            incident: Incident,
+        self,
+        incident: Incident,
     ):
         raise RuntimeError(
             "LLM is unavailable",
         )
+
 
 @pytest.mark.asyncio
 async def test_planner_node_adds_plan_to_state() -> None:
@@ -50,8 +52,9 @@ async def test_planner_node_adds_plan_to_state() -> None:
         }
     )
 
-    assert result["plan"].summary == ( "Investigate: Tests are failing" )
+    assert result["plan"].summary == ("Investigate: Tests are failing")
     assert result["error"] is None
+
 
 @pytest.mark.asyncio
 async def test_planner_node_captures_error() -> None:
@@ -65,13 +68,7 @@ async def test_planner_node_captures_error() -> None:
         repository="sentinel",
     )
 
-    result = await planner_node(
-        {
-            "incident": incident,
-            "plan": None,
-            "error": None
-        }
-    )
+    result = await planner_node({"incident": incident, "plan": None, "error": None})
 
     assert result["plan"] is None
     assert result["error"] == "LLM is unavailable"

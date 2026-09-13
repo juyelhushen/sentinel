@@ -19,11 +19,12 @@ def test_route_after_planning_returns_end_on_success() -> None:
 
     assert result == "investigator"
 
+
 def test_route_after_planning_returns_error_on_failure() -> None:
     incident = Incident(
-    title="Tests are failing",
-    description="Several tests are failing.",
-    repository="sentinel",
+        title="Tests are failing",
+        description="Several tests are failing.",
+        repository="sentinel",
     )
 
     result = route_after_planning(
@@ -34,4 +35,4 @@ def test_route_after_planning_returns_error_on_failure() -> None:
         }
     )
 
-    assert result == "error"
+    assert result == "fail_execution"

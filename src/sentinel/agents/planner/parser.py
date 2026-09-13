@@ -7,6 +7,7 @@ from sentinel.agents.planner.models import InvestigationPlan, PlanStep, PlanStep
 class PlanParsingError(ValueError):
     """Raised when an investigation plan cannot be parsed."""
 
+
 def parse_investigation_plan(
     content: str,
 ) -> InvestigationPlan:
@@ -27,10 +28,7 @@ def parse_investigation_plan(
         if not isinstance(raw_steps, list):
             raise TypeError("Steps must be a list.")
 
-        steps = tuple(
-            _parse_step(step)
-            for step in raw_steps
-        )
+        steps = tuple(_parse_step(step) for step in raw_steps)
 
         return InvestigationPlan(
             summary=summary,
@@ -43,24 +41,22 @@ def parse_investigation_plan(
         ValueError,
     ) as exc:
         raise PlanParsingError(
-            "LLM response does not match " "the investigation plan schema."
+            "LLM response does not match the investigation plan schema."
         ) from exc
 
 
 def _parse_step(
-        step: dict[str, Any],
+    step: dict[str, Any],
 ) -> PlanStep:
     """Parse a single investigation plan step."""
     arguments = step.get("arguments", {})
 
     if not isinstance(arguments, dict):
-        raise TypeError(
-        "Step arguments must be an object."
-    )
+        raise TypeError("Step arguments must be an object.")
 
     return PlanStep(
         step_number=step["step_number"],
         action=PlanStepType(step["action"]),
         description=step["description"],
         arguments=arguments,
-)
+    )

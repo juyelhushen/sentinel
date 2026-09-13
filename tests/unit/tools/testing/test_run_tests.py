@@ -28,9 +28,7 @@ async def test_run_tests_rejects_invalid_test_path_type(
     result = await tool.execute(request)
 
     assert result.status == ToolExecutionStatus.FAILURE
-    assert result.error == (
-        "Argument 'test_path' must be a string."
-    )
+    assert result.error == ("Argument 'test_path' must be a string.")
 
 
 @pytest.mark.asyncio
@@ -71,9 +69,7 @@ async def test_run_tests_rejects_missing_test_path(
     result = await tool.execute(request)
 
     assert result.status == ToolExecutionStatus.FAILURE
-    assert result.error == (
-        "Test path does not exist: tests"
-    )
+    assert result.error == ("Test path does not exist: tests")
 
 
 @pytest.mark.asyncio
@@ -151,9 +147,7 @@ async def test_run_tests_returns_failure(
         )
 
     assert result.status == ToolExecutionStatus.FAILURE
-    assert result.error == (
-        "Pytest exited with code 1."
-    )
+    assert result.error == ("Pytest exited with code 1.")
 
     assert "1 failed" in result.output
     assert "STDERR:" in result.output

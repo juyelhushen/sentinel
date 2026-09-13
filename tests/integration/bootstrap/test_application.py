@@ -42,8 +42,7 @@ async def test_sentinel_application_runs_end_to_end(
     source_file = tmp_path / "service.py"
 
     source_file.write_text(
-        "def validate_token():\n"
-        "    return True\n",
+        "def validate_token():\n    return True\n",
         encoding="utf-8",
     )
 

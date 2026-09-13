@@ -8,8 +8,8 @@ class SearchCodeTool(Tool):
     """Search for text inside files in the configured repository."""
 
     def __init__(
-            self,
-            repository_root: Path,
+        self,
+        repository_root: Path,
     ) -> None:
         self._repository_root = repository_root.resolve()
 
@@ -21,9 +21,9 @@ class SearchCodeTool(Tool):
     def description(self) -> str:
         return "Search for text inside files in the configured repository."
 
-    async def execute( 
-            self, 
-            request: ToolRequest, 
+    async def execute(
+        self,
+        request: ToolRequest,
     ) -> ToolResult:
 
         query = request.arguments.get("query")
@@ -57,15 +57,13 @@ class SearchCodeTool(Tool):
                 continue
 
             for line_number, line in enumerate(
-                    content.splitlines(),
-                    start=1,
+                content.splitlines(),
+                start=1,
             ):
                 if query in line:
                     matches.append(
                         {
-                            "path": str(
-                                path.relative_to(self._repository_root)
-                            ),
+                            "path": str(path.relative_to(self._repository_root)),
                             "line_number": line_number,
                             "line": line,
                         }

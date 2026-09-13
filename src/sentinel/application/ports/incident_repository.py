@@ -5,7 +5,7 @@ from sentinel.domain.models.incident import Incident
 
 
 class IncidentRepository(ABC):
-    """Port for incident persistence."""
+    """Persistence contract for incidents."""
 
     @abstractmethod
     def save(self, incident: Incident) -> None:

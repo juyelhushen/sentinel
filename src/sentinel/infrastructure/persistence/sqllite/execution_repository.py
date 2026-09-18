@@ -137,10 +137,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
                 (str(incident_id),),
             ).fetchall()
 
-        return [
-            self._to_domain(row)
-            for row in rows
-        ]
+        return [self._to_domain(row) for row in rows]
 
     @staticmethod
     def _to_domain(row: sqlite3.Row) -> Execution:
@@ -151,9 +148,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
             incident_id=UUID(row["incident_id"]),
             status=ExecutionStatus(row["status"]),
             started_at=(
-                datetime.fromisoformat(row["started_at"])
-                if row["started_at"]
-                else None
+                datetime.fromisoformat(row["started_at"]) if row["started_at"] else None
             ),
             completed_at=(
                 datetime.fromisoformat(row["completed_at"])

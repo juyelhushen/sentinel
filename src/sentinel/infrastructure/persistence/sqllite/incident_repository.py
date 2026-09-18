@@ -105,10 +105,6 @@ class SQLiteIncidentRepository(IncidentRepository):
             description=row["description"],
             repository=row["repository"],
             status=IncidentStatus(row["status"]),
-            created_at=__import__("datetime").datetime.fromisoformat(
-                row["created_at"]
-            ),
-            updated_at=__import__("datetime").datetime.fromisoformat(
-                row["updated_at"]
-            ),
+            created_at=__import__("datetime").datetime.fromisoformat(row["created_at"]),
+            updated_at=__import__("datetime").datetime.fromisoformat(row["updated_at"]),
         )

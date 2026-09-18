@@ -1,14 +1,16 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
+
 from sentinel.domain.models.execution import Execution
+
 
 class ExecutionRepository(ABC):
     """Persistence contract for executions."""
 
     @abstractmethod
     async def save(
-            self,
-            execution: Execution,
+        self,
+        execution: Execution,
     ) -> None:
         """Persist an execution."""
 

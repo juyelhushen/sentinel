@@ -50,3 +50,12 @@ class Incident:
 
     def _touch(self) -> None:
         self.updated_at = datetime.now(UTC)
+
+    def begin_verification(self) -> None:
+        """Move the incident into verification."""
+
+        if self.status != IncidentStatus.INVESTIGATING:
+            raise ValueError(f"Cannot verify incident in status: {self.status}")
+
+        self.status = IncidentStatus.VERIFYING
+        self._touch()

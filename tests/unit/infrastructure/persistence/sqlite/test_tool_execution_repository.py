@@ -1,7 +1,9 @@
 from uuid import uuid4
 
 from sentinel.domain.tool_execution import ToolExecution
-from sentinel.infrastructure.persistence.sqllite.tool_execution_repository import SQLiteToolExecutionRepository
+from sentinel.infrastructure.persistence.sqllite.tool_execution_repository import (
+    SQLiteToolExecutionRepository,
+)
 from sentinel.tools.models import ToolExecutionStatus
 
 
@@ -186,6 +188,4 @@ async def test_tool_executions_survive_repository_recreation(
     assert records[0].arguments == {
         "query": "ToolExecutor",
     }
-    assert records[0].output == (
-        "src/sentinel/tools/executor.py:10"
-    )
+    assert records[0].output == ("src/sentinel/tools/executor.py:10")

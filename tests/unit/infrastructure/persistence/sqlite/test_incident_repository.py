@@ -4,8 +4,12 @@ from sentinel.domain.enums.execution_status import ExecutionStatus
 from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.models.execution import Execution
 from sentinel.domain.models.incident import Incident
-from sentinel.infrastructure.persistence.sqllite.execution_repository import SQLiteExecutionRepository
-from sentinel.infrastructure.persistence.sqllite.incident_repository import SQLiteIncidentRepository
+from sentinel.infrastructure.persistence.sqllite.execution_repository import (
+    SQLiteExecutionRepository,
+)
+from sentinel.infrastructure.persistence.sqllite.incident_repository import (
+    SQLiteIncidentRepository,
+)
 
 
 async def test_save_and_get_incident(tmp_path):
@@ -33,6 +37,7 @@ async def test_save_and_get_incident(tmp_path):
     assert result.repository == incident.repository
     assert result.status == incident.status
 
+
 async def test_save_updates_existing_incident(tmp_path):
     repository = SQLiteIncidentRepository(
         tmp_path / "sentinel.db",
@@ -56,6 +61,7 @@ async def test_save_updates_existing_incident(tmp_path):
 
     assert result is not None
     assert result.status == IncidentStatus.INVESTIGATING
+
 
 async def test_execution_lifecycle_is_persisted(tmp_path):
     database_path = tmp_path / "sentinel.db"
@@ -134,13 +140,11 @@ async def test_get_executions_by_incident(tmp_path):
     )
 
     assert len(executions) == 2
-    assert {
-        execution.id
-        for execution in executions
-    } == {
+    assert {execution.id for execution in executions} == {
         first.id,
         second.id,
     }
+
 
 async def test_execution_survives_repository_recreation(tmp_path):
     database_path = tmp_path / "sentinel.db"

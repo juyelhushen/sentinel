@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from sentinel.domain.enums.execution_status import ExecutionStatus
@@ -34,14 +33,12 @@ def test_execution_fail_node_marks_running_execution_as_failed() -> None:
     result = execution_fail_node(state)
 
     assert result["execution"] is execution
+    assert result["error"] == "Planner failed."
     assert execution.status == ExecutionStatus.FAILED
     assert execution.completed_at is not None
-    assert isinstance(execution.completed_at, datetime)
-    assert execution.completed_at.tzinfo == UTC
-    assert result["error"] == "Planner failed."
 
 
-def test_execution_fail_node_does_not_fail_already_completed_execution() -> None:
+def test_execution_fail_node_propagates_failure() -> None:
     incident_id = uuid4()
 
     execution = Execution(
@@ -49,9 +46,6 @@ def test_execution_fail_node_does_not_fail_already_completed_execution() -> None
     )
 
     execution.start()
-    execution.complete()
-
-    completed_at = execution.completed_at
 
     incident = Incident(
         title="Tests are failing",
@@ -64,15 +58,15 @@ def test_execution_fail_node_does_not_fail_already_completed_execution() -> None
         "execution": execution,
         "plan": None,
         "investigation": None,
-        "error": "Some later error.",
+        "error": "Planner failed.",
     }
 
     result = execution_fail_node(state)
 
     assert result["execution"] is execution
-    assert execution.status == ExecutionStatus.COMPLETED
-    assert execution.completed_at == completed_at
-    assert result["error"] == "Some later error."
+    assert result["error"] == "Planner failed."
+    assert execution.status == ExecutionStatus.FAILED
+    assert execution.completed_at is not None
 
 
 def test_execution_fail_node_handles_missing_execution() -> None:

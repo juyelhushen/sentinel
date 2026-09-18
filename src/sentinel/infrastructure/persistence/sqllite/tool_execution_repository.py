@@ -82,10 +82,7 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
 
             connection.commit()
 
-    async def get_by_execution_id(
-            self,
-            execution_id: UUID
-    ) -> list[ToolExecution]:
+    async def get_by_execution_id(self, execution_id: UUID) -> list[ToolExecution]:
         """Return all tool executions belonging to an execution."""
 
         with sqlite3.connect(self._database_path) as connection:
@@ -110,10 +107,7 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
 
             rows = cursor.fetchall()
 
-        return [
-            self._row_to_tool_execution(row)
-            for row in rows
-        ]
+        return [self._row_to_tool_execution(row) for row in rows]
 
     @staticmethod
     def _row_to_tool_execution(
@@ -132,5 +126,3 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
             started_at=datetime.fromisoformat(row[7]),
             completed_at=(datetime.fromisoformat(row[8]) if row[8] else None),
         )
-
-

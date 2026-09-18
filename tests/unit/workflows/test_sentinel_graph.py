@@ -76,6 +76,7 @@ async def test_sentinel_graph_handles_planner_failure() -> None:
         {
             "incident": incident,
             "plan": None,
+            "investigation": None,
             "error": None,
         }
     )

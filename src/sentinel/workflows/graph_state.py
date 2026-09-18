@@ -6,7 +6,7 @@ from sentinel.domain.models.execution import Execution
 from sentinel.domain.models.incident import Incident
 
 
-class SentinelGraphState(TypedDict):
+class SentinelGraphState(TypedDict, total=False):
     """State shared between Sentinel LangGraph nodes."""
 
     incident: Incident

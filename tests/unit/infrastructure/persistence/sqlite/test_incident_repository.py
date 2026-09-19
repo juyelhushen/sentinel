@@ -4,20 +4,19 @@ from sentinel.domain.enums.execution_status import ExecutionStatus
 from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.models.execution import Execution
 from sentinel.domain.models.incident import Incident
-from sentinel.infrastructure.persistence.sqllite.execution_repository import (
-    SQLiteExecutionRepository,
-)
+from sentinel.infrastructure.database.schema import SchemaInitializer
+from sentinel.infrastructure.database.sqlite import SQLiteDatabase
+from sentinel.infrastructure.persistence.sqllite.execution_repository import SQLiteExecutionRepository
 from sentinel.infrastructure.persistence.sqllite.incident_repository import (
     SQLiteIncidentRepository,
 )
 
 
 async def test_save_and_get_incident(tmp_path):
-    repository = SQLiteIncidentRepository(
-        tmp_path / "sentinel.db",
-    )
 
-    await repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    repository = SQLiteIncidentRepository(database)
 
     incident = Incident(
         id=uuid4(),
@@ -39,11 +38,9 @@ async def test_save_and_get_incident(tmp_path):
 
 
 async def test_save_updates_existing_incident(tmp_path):
-    repository = SQLiteIncidentRepository(
-        tmp_path / "sentinel.db",
-    )
-
-    await repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    repository = SQLiteIncidentRepository(database)
 
     incident = Incident(
         title="Broken test",
@@ -61,21 +58,13 @@ async def test_save_updates_existing_incident(tmp_path):
 
     assert result is not None
     assert result.status == IncidentStatus.INVESTIGATING
-
+    
 
 async def test_execution_lifecycle_is_persisted(tmp_path):
-    database_path = tmp_path / "sentinel.db"
-
-    incident_repository = SQLiteIncidentRepository(
-        database_path,
-    )
-
-    execution_repository = SQLiteExecutionRepository(
-        database_path,
-    )
-
-    await incident_repository.initialize()
-    await execution_repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    incident_repository = SQLiteIncidentRepository(database)
+    execution_repository = SQLiteExecutionRepository(database)
 
     incident = Incident(
         title="Broken test",
@@ -108,18 +97,11 @@ async def test_execution_lifecycle_is_persisted(tmp_path):
 
 
 async def test_get_executions_by_incident(tmp_path):
-    database_path = tmp_path / "sentinel.db"
-
-    incident_repository = SQLiteIncidentRepository(
-        database_path,
-    )
-
-    execution_repository = SQLiteExecutionRepository(
-        database_path,
-    )
-
-    await incident_repository.initialize()
-    await execution_repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    
+    incident_repository = SQLiteIncidentRepository(database)
+    execution_repository = SQLiteExecutionRepository(database)
 
     incident = Incident(
         title="Broken test",
@@ -147,18 +129,10 @@ async def test_get_executions_by_incident(tmp_path):
 
 
 async def test_execution_survives_repository_recreation(tmp_path):
-    database_path = tmp_path / "sentinel.db"
-
-    repository = SQLiteExecutionRepository(
-        database_path,
-    )
-
-    incident_repository = SQLiteIncidentRepository(
-        database_path,
-    )
-
-    await incident_repository.initialize()
-    await repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    incident_repository = SQLiteIncidentRepository(database)
+    repository = SQLiteExecutionRepository(database)
 
     incident = Incident(
         title="Persistent incident",
@@ -174,9 +148,7 @@ async def test_execution_survives_repository_recreation(tmp_path):
 
     await repository.save(execution)
 
-    new_repository = SQLiteExecutionRepository(
-        database_path,
-    )
+    new_repository = SQLiteExecutionRepository(database)
 
     result = await new_repository.get_by_id(
         execution.id,

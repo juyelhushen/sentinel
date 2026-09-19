@@ -1,41 +1,18 @@
 import json
-import sqlite3
 from datetime import datetime
-from pathlib import Path
 from uuid import UUID
 
 from sentinel.application.ports.tool_execution_repository import ToolExecutionRepository
 from sentinel.domain.tool_execution import ToolExecution
+from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.tools.models import ToolExecutionStatus
 
 
 class SQLiteToolExecutionRepository(ToolExecutionRepository):
     """SQLite persistence for tool execution audit records."""
 
-    def __init__(self, database_path: Path) -> None:
-        self._database_path = database_path
-
-    async def initialize(self) -> None:
-        """Create the tool execution table if it does not exist."""
-
-        with sqlite3.connect(self._database_path) as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tool_executions (
-                    request_id TEXT PRIMARY KEY,
-                    tool_name TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    execution_id TEXT,
-                    arguments TEXT NOT NULL,
-                    output TEXT,
-                    error TEXT,
-                    started_at TEXT NOT NULL,
-                    completed_at TEXT
-                )
-                """
-            )
-
-            connection.commit()
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
 
     async def save(
         self,
@@ -43,7 +20,7 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
     ) -> None:
         """Persist a tool execution."""
 
-        with sqlite3.connect(self._database_path) as connection:
+        with self._database.connect() as connection:
             connection.execute(
                 """
                 INSERT INTO tool_executions (
@@ -80,12 +57,12 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
                 ),
             )
 
-            connection.commit()
+            # connection.commit()
 
     async def get_by_execution_id(self, execution_id: UUID) -> list[ToolExecution]:
         """Return all tool executions belonging to an execution."""
 
-        with sqlite3.connect(self._database_path) as connection:
+        with self._database.connect() as connection:
             cursor = connection.execute(
                 """
                 SELECT 

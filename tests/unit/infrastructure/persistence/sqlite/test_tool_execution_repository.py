@@ -1,21 +1,18 @@
 from uuid import uuid4
 
 from sentinel.domain.tool_execution import ToolExecution
-from sentinel.infrastructure.persistence.sqllite.tool_execution_repository import (
-    SQLiteToolExecutionRepository,
-)
+from sentinel.infrastructure.database.schema import SchemaInitializer
+from sentinel.infrastructure.database.sqlite import SQLiteDatabase
+from sentinel.infrastructure.persistence.sqllite.tool_execution_repository import SQLiteToolExecutionRepository
 from sentinel.tools.models import ToolExecutionStatus
 
 
 async def test_save_and_get_by_execution_id(tmp_path):
-    database_path = tmp_path / "sentinel.db"
 
-    repository = SQLiteToolExecutionRepository(
-        database_path=database_path,
-    )
-
-    await repository.initialize()
-
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    repository = SQLiteToolExecutionRepository(database)
+    
     execution_id = uuid4()
 
     tool_execution = ToolExecution(
@@ -52,13 +49,9 @@ async def test_save_and_get_by_execution_id(tmp_path):
 
 
 async def test_save_and_get_failed_tool_execution(tmp_path):
-    database_path = tmp_path / "sentinel.db"
-
-    repository = SQLiteToolExecutionRepository(
-        database_path=database_path,
-    )
-
-    await repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    repository = SQLiteToolExecutionRepository(database)
 
     execution_id = uuid4()
 
@@ -92,13 +85,10 @@ async def test_save_and_get_failed_tool_execution(tmp_path):
 
 
 async def test_save_and_get_denied_tool_execution(tmp_path):
-    database_path = tmp_path / "sentinel.db"
 
-    repository = SQLiteToolExecutionRepository(
-        database_path=database_path,
-    )
-
-    await repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    repository = SQLiteToolExecutionRepository(database)
 
     execution_id = uuid4()
 
@@ -133,13 +123,9 @@ async def test_save_and_get_denied_tool_execution(tmp_path):
 async def test_get_by_execution_id_returns_empty_for_unknown_execution(
     tmp_path,
 ):
-    database_path = tmp_path / "sentinel.db"
-
-    repository = SQLiteToolExecutionRepository(
-        database_path=database_path,
-    )
-
-    await repository.initialize()
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    repository = SQLiteToolExecutionRepository(database)
 
     records = await repository.get_by_execution_id(
         uuid4(),
@@ -151,15 +137,12 @@ async def test_get_by_execution_id_returns_empty_for_unknown_execution(
 async def test_tool_executions_survive_repository_recreation(
     tmp_path,
 ):
-    database_path = tmp_path / "sentinel.db"
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
 
     execution_id = uuid4()
 
-    first_repository = SQLiteToolExecutionRepository(
-        database_path=database_path,
-    )
-
-    await first_repository.initialize()
+    first_repository = SQLiteToolExecutionRepository(database)
 
     tool_execution = ToolExecution(
         tool_name="search_code",
@@ -173,9 +156,7 @@ async def test_tool_executions_survive_repository_recreation(
 
     await first_repository.save(tool_execution)
 
-    second_repository = SQLiteToolExecutionRepository(
-        database_path=database_path,
-    )
+    second_repository = SQLiteToolExecutionRepository(database)
 
     records = await second_repository.get_by_execution_id(
         execution_id,

@@ -7,38 +7,19 @@ from sentinel.application.ports.incident_repository import (
 )
 from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.models.incident import Incident
+from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 
 
 class SQLiteIncidentRepository(IncidentRepository):
     """SQLite implementation of the incident repository."""
 
-    def __init__(self, database_path: Path) -> None:
-        self._database_path = database_path
-
-    async def initialize(self) -> None:
-        """Create the incidents table."""
-
-        with sqlite3.connect(self._database_path) as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS incidents (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    repository TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
-
-            connection.commit()
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
 
     async def save(self, incident: Incident) -> None:
         """Insert or update an incident."""
 
-        with sqlite3.connect(self._database_path) as connection:
+        with self._database.connect() as connection:
             connection.execute(
                 """
                 INSERT INTO incidents (
@@ -69,7 +50,7 @@ class SQLiteIncidentRepository(IncidentRepository):
                 ),
             )
 
-            connection.commit()
+            # connection.commit()
 
     async def get(
         self,
@@ -77,7 +58,7 @@ class SQLiteIncidentRepository(IncidentRepository):
     ) -> Incident | None:
         """Retrieve an incident."""
 
-        with sqlite3.connect(self._database_path) as connection:
+        with self._database.connect() as connection:
             connection.row_factory = sqlite3.Row
 
             row = connection.execute(

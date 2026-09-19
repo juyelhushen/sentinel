@@ -8,41 +8,14 @@ from sentinel.application.ports.execution_repository import (
 )
 from sentinel.domain.enums.execution_status import ExecutionStatus
 from sentinel.domain.models.execution import Execution
+from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 
 
 class SQLiteExecutionRepository(ExecutionRepository):
     """SQLite implementation of the execution repository."""
 
-    def __init__(self, database_path: Path) -> None:
-        self._database_path = database_path
-
-    async def initialize(self) -> None:
-        """Create the executions table."""
-
-        with sqlite3.connect(self._database_path) as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS executions (
-                    id TEXT PRIMARY KEY,
-                    incident_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    started_at TEXT,
-                    completed_at TEXT,
-                    FOREIGN KEY (incident_id)
-                        REFERENCES incidents(id)
-                )
-                """
-            )
-
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS
-                idx_executions_incident_id
-                ON executions(incident_id)
-                """
-            )
-
-            connection.commit()
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database = database
 
     async def save(
         self,
@@ -50,7 +23,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
     ) -> None:
         """Insert or update an execution."""
 
-        with sqlite3.connect(self._database_path) as connection:
+        with self._database.connect() as connection:
             connection.execute(
                 """
                 INSERT INTO executions (
@@ -91,7 +64,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
     ) -> Execution | None:
         """Retrieve an execution by ID."""
 
-        with sqlite3.connect(self._database_path) as connection:
+        with self._database.connect() as connection:
             connection.row_factory = sqlite3.Row
 
             row = connection.execute(
@@ -119,7 +92,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
     ) -> list[Execution]:
         """Retrieve all executions for an incident."""
 
-        with sqlite3.connect(self._database_path) as connection:
+        with self._database.connect() as connection:
             connection.row_factory = sqlite3.Row
 
             rows = connection.execute(

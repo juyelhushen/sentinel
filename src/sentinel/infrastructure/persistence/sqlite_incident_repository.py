@@ -1,4 +1,3 @@
-import sqlite3
 from datetime import datetime
 from uuid import UUID
 
@@ -7,18 +6,19 @@ from sentinel.application.ports.incident_repository import (
 )
 from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.models.incident import Incident
+from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 
 
 class SQLiteIncidentRepository(IncidentRepository):
     """SQLite implementation of the incident repository."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
-        self._connection = connection
+    def __init__(self, database: SQLiteDatabase) -> None:
+        self._database=database
 
     def save(self, incident: Incident) -> None:
         """Insert or update an incident."""
 
-        self._connection.execute(
+        self._database.execute(
             """
             INSERT INTO incidents (
                 id,
@@ -48,12 +48,12 @@ class SQLiteIncidentRepository(IncidentRepository):
             ),
         )
 
-        self._connection.commit()
+        # self._connection.commit()
 
     def get(self, incident_id: UUID) -> Incident | None:
         """Retrieve an incident by ID."""
 
-        row = self._connection.execute(
+        row = self._database.execute(
             """
             SELECT
                 id,

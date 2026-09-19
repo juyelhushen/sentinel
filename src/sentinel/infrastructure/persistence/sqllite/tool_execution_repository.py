@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from datetime import datetime
 from uuid import UUID
 
@@ -17,8 +18,14 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
     async def save(
         self,
         tool_execution: ToolExecution,
+        connection: sqlite3.Connection | None = None,
     ) -> None:
         """Persist a tool execution."""
+
+
+        if connection is not None:
+            connection.execute(...)
+            return
 
         with self._database.connect() as connection:
             connection.execute(

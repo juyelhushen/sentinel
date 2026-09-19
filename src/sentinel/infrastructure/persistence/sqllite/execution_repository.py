@@ -1,6 +1,5 @@
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 from uuid import UUID
 
 from sentinel.application.ports.execution_repository import (
@@ -20,43 +19,55 @@ class SQLiteExecutionRepository(ExecutionRepository):
     async def save(
         self,
         execution: Execution,
+        connection: sqlite3.Connection | None = None,
     ) -> None:
         """Insert or update an execution."""
 
-        with self._database.connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO executions (
-                    id,
-                    incident_id,
-                    status,
-                    started_at,
-                    completed_at
-                )
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    status = excluded.status,
-                    started_at = excluded.started_at,
-                    completed_at = excluded.completed_at
-                """,
-                (
-                    str(execution.id),
-                    str(execution.incident_id),
-                    execution.status.value,
-                    (
-                        execution.started_at.isoformat()
-                        if execution.started_at
-                        else None
-                    ),
-                    (
-                        execution.completed_at.isoformat()
-                        if execution.completed_at
-                        else None
-                    ),
-                ),
-            )
+        if connection is not None:
+            self._save(execution, connection)
+            return
 
-            connection.commit()
+        with self._database.connect() as db_connection:
+            self._save(execution, db_connection)
+
+            db_connection.commit()
+
+    def _save(
+        self,
+        execution: Execution,
+        connection: sqlite3.Connection,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO executions (
+                id,
+                incident_id,
+                status,
+                started_at,
+                completed_at
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                status = excluded.status,
+                started_at = excluded.started_at,
+                completed_at = excluded.completed_at
+            """,
+            (
+                str(execution.id),
+                str(execution.incident_id),
+                execution.status.value,
+                (
+                    execution.started_at.isoformat()
+                    if execution.started_at
+                    else None
+                ),
+                (
+                    execution.completed_at.isoformat()
+                    if execution.completed_at
+                    else None
+                ),
+            ),
+        )
 
     async def get_by_id(
         self,

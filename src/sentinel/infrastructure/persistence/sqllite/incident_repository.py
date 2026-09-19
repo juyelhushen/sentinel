@@ -1,5 +1,4 @@
 import sqlite3
-from pathlib import Path
 from uuid import UUID
 
 from sentinel.application.ports.incident_repository import (
@@ -16,41 +15,54 @@ class SQLiteIncidentRepository(IncidentRepository):
     def __init__(self, database: SQLiteDatabase) -> None:
         self._database = database
 
-    async def save(self, incident: Incident) -> None:
-        """Insert or update an incident."""
+    async def save(
+        self,
+        incident: Incident,
+        connection: sqlite3.Connection | None = None,
+    ) -> None:
+        if connection is not None:
+            self._save(incident, connection)
+            return
 
-        with self._database.connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO incidents (
-                    id,
-                    title,
-                    description,
-                    repository,
-                    status,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    title = excluded.title,
-                    description = excluded.description,
-                    repository = excluded.repository,
-                    status = excluded.status,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    str(incident.id),
-                    incident.title,
-                    incident.description,
-                    incident.repository,
-                    incident.status.value,
-                    incident.created_at.isoformat(),
-                    incident.updated_at.isoformat(),
-                ),
-            )
+        with self._database.connect() as db_connection:
+            self._save(incident, db_connection)
 
             # connection.commit()
+
+    def _save(
+        self,
+        incident: Incident,
+        connection: sqlite3.Connection,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO incidents (
+                id,
+                title,
+                description,
+                repository,
+                status,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                description = excluded.description,
+                repository = excluded.repository,
+                status = excluded.status,
+                updated_at = excluded.updated_at
+            """,
+            (
+                str(incident.id),
+                incident.title,
+                incident.description,
+                incident.repository,
+                incident.status.value,
+                incident.created_at.isoformat(),
+                incident.updated_at.isoformat(),
+            ),
+        )
 
     async def get(
         self,
@@ -89,3 +101,9 @@ class SQLiteIncidentRepository(IncidentRepository):
             created_at=__import__("datetime").datetime.fromisoformat(row["created_at"]),
             updated_at=__import__("datetime").datetime.fromisoformat(row["updated_at"]),
         )
+
+    async def get_by_id(
+        self,
+        incident_id: UUID,
+    ) -> Incident | None:
+        return await self.get(incident_id)

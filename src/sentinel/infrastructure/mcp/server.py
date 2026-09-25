@@ -32,7 +32,7 @@ class SentinelMCPServer:
                 arguments={"path": path}
             )
 
-            result = await self._tool_executor.execute(request)
+            result = await self.tool_executor.execute(request)
 
             if not result.succeeded:
                 raise RuntimeError(result.error or "read_file execution failed.")
@@ -42,3 +42,21 @@ class SentinelMCPServer:
     @property
     def server(self) -> MCPServer:
         return self._server
+
+async def run_server(
+    repository_root: Path,
+    tool_executor: ToolExecutor,
+) -> None:
+    """Run the Sentinel MCP server over stdio."""
+
+    server = SentinelMCPServer(
+        repository_root=repository_root,
+        tool_executor=tool_executor,
+    )
+
+    await server.server.run_stdio_async()
+
+if __name__ == "__main__":
+    raise SystemExit(
+        "Use the application bootstrap to start the Sentinel MCP server."
+    )

@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from sentinel.infrastructure.mcb.server import SentinelMCPServer
+from sentinel.infrastructure.mcp.server import SentinelMCPServer
 
 
 @pytest.mark.asyncio

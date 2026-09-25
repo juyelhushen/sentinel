@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from sentinel.application.ports.tool_execution_repository import ToolExecutionRepository
 from sentinel.tools.executor import ToolExecutor
 from sentinel.tools.filesystem.read_file import ReadFileTool
 from sentinel.tools.filesystem.search_code import SearchCodeTool
@@ -8,27 +9,22 @@ from sentinel.tools.registry import ToolRegistry
 from sentinel.tools.testing.run_tests import RunTestsTool
 
 
-def create_tool_executor(repository_root: Path) -> ToolExecutor:
-    """Create configured sentinel tool executor."""
-
+def create_tool_executor(
+    repository_root: Path,
+    audit_repository: ToolExecutionRepository | None = None,
+) -> ToolExecutor:
     registry = ToolRegistry()
 
     registry.register(
-        ReadFileTool(
-            repository_root=repository_root,
-        )
+        ReadFileTool(repository_root=repository_root)
     )
 
     registry.register(
-        SearchCodeTool(
-            repository_root=repository_root,
-        )
+        SearchCodeTool(repository_root=repository_root)
     )
 
     registry.register(
-        RunTestsTool(
-            repository_root=repository_root,
-        )
+        RunTestsTool(repository_root=repository_root)
     )
 
     policy = ToolPolicy(
@@ -42,4 +38,5 @@ def create_tool_executor(repository_root: Path) -> ToolExecutor:
     return ToolExecutor(
         registry=registry,
         policy=policy,
+        audit_repository=audit_repository,
     )

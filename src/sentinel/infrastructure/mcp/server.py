@@ -39,6 +39,27 @@ class SentinelMCPServer:
 
             return str(result.output)
 
+        @self._server.tool()
+        async def search_code(
+                query: str,
+                path: str = '.',
+        ) -> str:
+            """Search repository source code for a text pattern."""
+            request = ToolRequest(
+                tool_name="search_code",
+                arguments={
+                    "query": query,
+                    "path": path
+                },
+            )
+
+            result = await self.tool_executor.execute(request)
+
+            if not result.succeeded:
+                raise RuntimeError(result.error or "search_code execution failed.")
+
+            return str(result.output)
+
     @property
     def server(self) -> MCPServer:
         return self._server

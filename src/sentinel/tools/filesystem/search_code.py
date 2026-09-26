@@ -5,6 +5,7 @@ from sentinel.tools.models import ToolExecutionStatus, ToolRequest, ToolResult
 
 
 class SearchCodeTool(Tool):
+
     """Search for text inside files in the configured repository."""
 
     def __init__(

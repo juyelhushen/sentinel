@@ -20,9 +20,9 @@ class SentinelMCPServer:
 
         self._server = MCPServer("sentinel")
 
-        self._register_tools()
+        self.register_tools()
 
-    def _register_tools(self) -> None:
+    def register_tools(self) -> None:
         
         @self._server.tool()
         async def read_file(path: str) -> str:
@@ -36,6 +36,45 @@ class SentinelMCPServer:
 
             if not result.succeeded:
                 raise RuntimeError(result.error or "read_file execution failed.")
+
+            return str(result.output)
+
+        @self._server.tool()
+        async def search_code(
+                query: str,
+                path: str = '.',
+        ) -> str:
+            """Search repository source code for a text pattern."""
+            request = ToolRequest(
+                tool_name="search_code",
+                arguments={
+                    "query": query,
+                    "path": path
+                },
+            )
+
+            result = await self.tool_executor.execute(request)
+
+            if not result.succeeded:
+                raise RuntimeError(result.error or "search_code execution failed.")
+
+            return str(result.output)
+
+        @self._server.tool()
+        async def run_tests(path: str) -> str:
+            # Map MCP "path" parameter to RunTestsTool's "test_path" argument.
+            # RunTestsTool.execute() expects "test_path", not "path".
+            request = ToolRequest(
+                tool_name="run_tests",
+                arguments={"test_path": path},
+            )
+
+            result = await self.tool_executor.execute(request)
+
+            if not result.succeeded:
+                raise RuntimeError(
+                    result.error or "run_tests execution failed."
+                )
 
             return str(result.output)
 

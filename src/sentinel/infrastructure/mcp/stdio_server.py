@@ -2,7 +2,7 @@ import asyncio
 import os
 from pathlib import Path
 
-from sentinel.infrastructure.dependencies.tools import create_tool_executor
+from sentinel.bootstrap.tools import create_tool_executor
 from sentinel.infrastructure.mcp.server import run_server
 
 async def main() -> None:

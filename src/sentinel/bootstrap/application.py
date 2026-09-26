@@ -3,6 +3,7 @@ from typing import Any
 
 from sentinel.agents.investigator.agent import InvestigatorAgent
 from sentinel.agents.planner.agent import PlannerAgent
+from sentinel.application.tools.local_gateway import LocalToolGateway
 from sentinel.bootstrap.tools import create_tool_executor
 from sentinel.llm.base import LLMProvider
 from sentinel.workflows.sentinel_graph import create_sentinel_graph
@@ -19,12 +20,16 @@ def create_sentinel_application(
         repository_root=repository_root,
     )
 
+    local_gateway = LocalToolGateway(
+        executor=tool_executor,
+    )
+
     planner_agent = PlannerAgent(
         llm_provider=llm_provider,
     )
 
     investigator_agent = InvestigatorAgent(
-        tool_executor=tool_executor,
+        tool_gateway=local_gateway,
     )
 
     return create_sentinel_graph(

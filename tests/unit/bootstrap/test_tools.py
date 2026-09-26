@@ -90,3 +90,53 @@ async def test_create_tool_executor_registers_run_tests_tool(
 
     assert result.status == ToolExecutionStatus.FAILURE
     assert result.error == ("Test path does not exist: missing_tests")
+
+
+@pytest.mark.asyncio
+async def test_create_tool_executor_registers_list_directory_tool(
+    tmp_path: Path,
+) -> None:
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    (subdir / "file1.txt").write_text("content1")
+    (subdir / "file2.txt").write_text("content2")
+
+    executor = create_tool_executor(
+        repository_root=tmp_path,
+    )
+
+    result = await executor.execute(
+        ToolRequest(
+            tool_name="list-directory",
+            arguments={
+                "path": "subdir",
+            },
+        )
+    )
+
+    assert result.status == ToolExecutionStatus.SUCCESS
+    assert sorted(result.output) == ["file1.txt", "file2.txt"]
+
+
+@pytest.mark.asyncio
+async def test_create_tool_executor_registers_search_files_tool(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "example.txt"
+    file_path.write_text("hello world sentinel", encoding="utf-8")
+
+    executor = create_tool_executor(
+        repository_root=tmp_path,
+    )
+
+    result = await executor.execute(
+        ToolRequest(
+            tool_name="search_files",
+            arguments={
+                "query": "sentinel",
+            },
+        )
+    )
+
+    assert result.status == ToolExecutionStatus.SUCCESS
+    assert result.output == ["example.txt"]

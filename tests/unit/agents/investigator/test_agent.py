@@ -1,38 +1,30 @@
+from unittest.mock import AsyncMock
+
 import pytest
 
 from sentinel.agents.investigator.agent import InvestigatorAgent
 from sentinel.agents.planner.models import InvestigationPlan, PlanStep, PlanStepType
+from sentinel.application.ports.tool_gateway import ToolGateway
 from sentinel.tools.models import ToolExecutionStatus, ToolResult
-
-
-class FakeToolExecutor:
-    """Fake tool executor for InvestigatorAgent tests."""
-
-    def __init__(
-        self,
-        results: list[ToolResult],
-    ) -> None:
-        self._results = results
-        self.requests: list[object] = []
-
-    async def execute(self, request: object) -> ToolResult:
-        self.requests.append(request)
-        return self._results.pop(0)
 
 
 @pytest.mark.asyncio
 async def test_investigator_agent_executes_plan() -> None:
-    executor = FakeToolExecutor(
-        results=[
-            ToolResult(status=ToolExecutionStatus.SUCCESS, output="Tests passed"),
-            ToolResult(
-                status=ToolExecutionStatus.SUCCESS, output="File contents found"
-            ),
-        ]
-    )
+    gateway = AsyncMock(spec=ToolGateway)
 
-    agent = InvestigatorAgent(
-        tool_executor=executor,
+    gateway.execute.side_effect = [
+        ToolResult(
+            status=ToolExecutionStatus.SUCCESS,
+            output="Tests passed",
+        ),
+        ToolResult(
+            status=ToolExecutionStatus.SUCCESS,
+            output="File contents found",
+        ),
+    ]
+
+    investigator = InvestigatorAgent(
+        tool_gateway=gateway,
     )
 
     plan = InvestigationPlan(
@@ -51,7 +43,7 @@ async def test_investigator_agent_executes_plan() -> None:
         ),
     )
 
-    result = await agent.investigate(plan)
+    result = await investigator.investigate(plan)
 
     assert len(result.step_results) == 2
 
@@ -61,24 +53,29 @@ async def test_investigator_agent_executes_plan() -> None:
     assert result.step_results[1].success is True
     assert result.step_results[1].findings == ("File contents found.")
 
-    assert len(executor.requests) == 2
-    assert executor.requests[0].tool_name == "run_tests"
-    assert executor.requests[1].tool_name == "read_file"
+    assert len(gateway.execute.call_args_list) == 2
 
+    assert (
+        gateway.execute.call_args_list[0].args[0].tool_name
+        == "run_tests"
+    )
+
+    assert (
+            gateway.execute.call_args_list[1].args[0].tool_name
+            == "read_file"
+    )
 
 @pytest.mark.asyncio
 async def test_investigator_agent_records_failed_tool() -> None:
-    executor = FakeToolExecutor(
-        results=[
-            ToolResult(
-                status=ToolExecutionStatus.FAILURE,
-                error="Tests failed.",
-            ),
-        ]
+    gateway = AsyncMock(spec=ToolGateway)
+
+    gateway.execute.return_value = ToolResult(
+        status=ToolExecutionStatus.FAILURE,
+        error="Tests failed",
     )
 
-    agent = InvestigatorAgent(
-        tool_executor=executor,
+    investigator = InvestigatorAgent(
+        tool_gateway=gateway,
     )
 
     plan = InvestigationPlan(
@@ -92,7 +89,8 @@ async def test_investigator_agent_records_failed_tool() -> None:
         ),
     )
 
-    result = await agent.investigate(plan)
+    result = await investigator.investigate(plan)
+
     assert len(result.step_results) == 1
     assert result.step_results[0].success is False
     assert result.step_results[0].findings == "Tests failed."
@@ -100,10 +98,21 @@ async def test_investigator_agent_records_failed_tool() -> None:
 
 @pytest.mark.asyncio
 async def test_investigator_agent_handles_empty_plan() -> None:
-    executor = FakeToolExecutor(results=[])
+    gateway = AsyncMock(spec=ToolGateway)
 
-    agent = InvestigatorAgent(
-        tool_executor=executor,
+    gateway.execute.side_effect = [
+        ToolResult(
+            status=ToolExecutionStatus.SUCCESS,
+            output="Tests passed",
+        ),
+        ToolResult(
+            status=ToolExecutionStatus.SUCCESS,
+            output="File contents found",
+        ),
+    ]
+
+    investigator = InvestigatorAgent(
+        tool_gateway=gateway,
     )
 
     plan = InvestigationPlan(
@@ -111,9 +120,9 @@ async def test_investigator_agent_handles_empty_plan() -> None:
         steps=(),
     )
 
-    result = await agent.investigate(plan)
+    result = await investigator.investigate(plan)
 
     assert result.step_results == ()
-    assert result.summary == ("No investigation steps were executed.")
+    assert result.summary == "No investigation steps were executed."
 
-    assert executor.requests == []
+    assert gateway.execute.call_count == 0

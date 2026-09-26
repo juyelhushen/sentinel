@@ -6,6 +6,7 @@ from sentinel.agents.investigator.models import (
     StepInvestigationResult,
 )
 from sentinel.agents.planner.models import InvestigationPlan, PlanStepType
+from sentinel.application.ports.tool_gateway import ToolGateway
 from sentinel.tools.models import ToolRequest, ToolResult
 
 
@@ -19,9 +20,10 @@ class InvestigatorAgent:
 
     def __init__(
         self,
-        tool_executor: ToolExecutorProtocol,
+        tool_gateway: ToolGateway,
     ) -> None:
-        self._tool_executor = tool_executor
+        self.tool_gateway = tool_gateway
+
 
     async def investigate(
         self,
@@ -34,7 +36,7 @@ class InvestigatorAgent:
         for step in plan.steps:
             request = map_plan_step_to_tool_request(step)
 
-            tool_result = await self._tool_executor.execute(
+            tool_result = await self.tool_gateway.execute(
                 request,
             )
 
@@ -63,25 +65,31 @@ class InvestigatorAgent:
         """Convert a tool result into investigation findings."""
 
         if tool_result.succeeded and step_action == PlanStepType.RUN_TESTS:
-            return "Tests passed."
-
-        if tool_result.succeeded:
+            findings = "Tests passed"
+        elif tool_result.succeeded:
             output = tool_result.output
 
             if not isinstance(output, str):
-                return str(output)
+                findings = str(output)
+            else:
+                text = output.strip()
 
-            text = output.strip()
+                if not text:
+                    findings = "Tool execution completed"
+                elif text.endswith((".", "!", "?")):
+                    findings = text
+                else:
+                    findings = f"{text}"
+        else:
+            findings = tool_result.error or "Tool execution failed"
 
-            if not text:
-                return "Tool execution completed."
+        # Normalize: ensure non-empty findings end with exactly one period
+        if findings:
+            findings = findings.rstrip(".") + "."
+        else:
+            findings = "No findings."
 
-            if text.endswith((".", "!", "?")):
-                return text
-
-            return f"{text}."
-
-        return tool_result.error or "Tool execution failed."
+        return findings
 
     @staticmethod
     def _build_summary(step_results: list[StepInvestigationResult]) -> str:

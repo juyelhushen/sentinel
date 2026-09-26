@@ -144,3 +144,49 @@ async def test_mcp_client_can_call_search_code():
 
     finally:
         await client.close()
+
+@pytest.mark.asyncio
+async def test_mcp_client_can_call_run_tests():
+    # Set repository root to match other integration tests.
+    # Required so MCP server uses correct working directory for relative paths.
+    repository_root = Path(__file__).resolve().parents[3]
+    
+    client = SentinelMCPClient()
+
+    try:
+        # Pass repository_root to MCP server via environment variable.
+        # Without this, server defaults to current working directory,
+        # causing test discovery to fail.
+        await client.connect(
+            command="uv",
+            args=[
+                "run",
+                "python",
+                "-m",
+                "sentinel.infrastructure.mcp.stdio_server",
+            ],
+            env={
+                "SENTINEL_REPOSITORY_ROOT": str(repository_root),
+            },
+        )
+
+        result = await client.call_tool(
+            "run_tests",
+            {
+                "path": "tests/unit/infrastructure/mcp/test_server.py",
+            },
+        )
+
+        assert result.is_error is False
+        assert result.content
+
+        text = "\n".join(
+            item.text
+            for item in result.content
+            if hasattr(item, "text")
+        )
+
+        assert "passed" in text.lower()
+
+    finally:
+        await client.close()

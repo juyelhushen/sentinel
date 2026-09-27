@@ -2,8 +2,13 @@ from sentinel.domain.models.execution import Execution
 from sentinel.domain.models.incident import Incident
 from sentinel.infrastructure.database.schema import SchemaInitializer
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
-from sentinel.infrastructure.persistence.sqllite.execution_repository import SQLiteExecutionRepository
-from sentinel.infrastructure.persistence.sqllite.incident_repository import SQLiteIncidentRepository
+from sentinel.infrastructure.persistence.sqllite.execution_repository import (
+    SQLiteExecutionRepository,
+)
+from sentinel.infrastructure.persistence.sqllite.incident_repository import (
+    SQLiteIncidentRepository,
+)
+
 
 async def test_incident_and_execution_share_transaction(tmp_path):
     database = SQLiteDatabase(tmp_path / "sentinel.db")

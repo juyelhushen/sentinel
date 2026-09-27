@@ -6,7 +6,9 @@ from sentinel.domain.models.execution import Execution
 from sentinel.domain.models.incident import Incident
 from sentinel.infrastructure.database.schema import SchemaInitializer
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
-from sentinel.infrastructure.persistence.sqllite.execution_repository import SQLiteExecutionRepository
+from sentinel.infrastructure.persistence.sqllite.execution_repository import (
+    SQLiteExecutionRepository,
+)
 from sentinel.infrastructure.persistence.sqllite.incident_repository import (
     SQLiteIncidentRepository,
 )
@@ -58,7 +60,7 @@ async def test_save_updates_existing_incident(tmp_path):
 
     assert result is not None
     assert result.status == IncidentStatus.INVESTIGATING
-    
+
 
 async def test_execution_lifecycle_is_persisted(tmp_path):
     database = SQLiteDatabase(tmp_path / "sentinel.db")
@@ -99,7 +101,7 @@ async def test_execution_lifecycle_is_persisted(tmp_path):
 async def test_get_executions_by_incident(tmp_path):
     database = SQLiteDatabase(tmp_path / "sentinel.db")
     SchemaInitializer(database).initialize()
-    
+
     incident_repository = SQLiteIncidentRepository(database)
     execution_repository = SQLiteExecutionRepository(database)
 

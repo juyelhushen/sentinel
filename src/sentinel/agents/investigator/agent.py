@@ -24,7 +24,6 @@ class InvestigatorAgent:
     ) -> None:
         self.tool_gateway = tool_gateway
 
-
     async def investigate(
         self,
         plan: InvestigationPlan,

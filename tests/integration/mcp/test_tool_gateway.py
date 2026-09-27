@@ -4,12 +4,13 @@ from unittest.mock import AsyncMock
 import pytest
 
 from sentinel.infrastructure.mcp.tool_gateway import MCPToolGateway
-from sentinel.tools.models import ToolRequest, ToolExecutionStatus
+from sentinel.tools.models import ToolExecutionStatus, ToolRequest
 
 
 @pytest.mark.asyncio
 async def test_mcp_gateway_returns_successful_tool_result():
     client = AsyncMock()
+    client.tool_names = {"read_file"}
 
     client.call_tool.return_value = SimpleNamespace(
         is_error=False,
@@ -36,9 +37,11 @@ async def test_mcp_gateway_returns_successful_tool_result():
         {"path": "example.txt"},
     )
 
+
 @pytest.mark.asyncio
 async def test_mcp_gateway_translates_mcp_error():
     client = AsyncMock()
+    client.tool_names = {"read_file"}
 
     client.call_tool.return_value = SimpleNamespace(
         is_error=True,
@@ -59,16 +62,19 @@ async def test_mcp_gateway_translates_mcp_error():
     assert result.status == ToolExecutionStatus.FAILURE
     assert result.error == "File not found"
     assert result.request_id == request.request_id
-    
+
+
 @pytest.mark.asyncio
 async def test_mcp_gateway_combines_text_content():
     client = AsyncMock()
+    client.tool_names = {"read_file"}
 
     client.call_tool.return_value = SimpleNamespace(
         is_error=False,
         content=[
             SimpleNamespace(text="line 1"),
             SimpleNamespace(text="line 2"),
+            SimpleNamespace(text="file contents"),
         ],
     )
 

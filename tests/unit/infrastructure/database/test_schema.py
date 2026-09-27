@@ -56,8 +56,6 @@ def test_foreign_keys_are_enabled(tmp_path):
     initializer.initialize()
 
     with database.connect() as connection:
-        result = connection.execute(
-            "PRAGMA foreign_keys"
-        ).fetchone()
+        result = connection.execute("PRAGMA foreign_keys").fetchone()
 
     assert result == (1,)

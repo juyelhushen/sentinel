@@ -22,7 +22,6 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
     ) -> None:
         """Persist a tool execution."""
 
-
         if connection is not None:
             connection.execute(...)
             return

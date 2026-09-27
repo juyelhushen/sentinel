@@ -3,16 +3,14 @@ from unittest.mock import AsyncMock
 import pytest
 
 from sentinel.application.tools.local_gateway import LocalToolGateway
-from sentinel.tools.models import ToolResult, ToolExecutionStatus, ToolRequest
+from sentinel.tools.models import ToolExecutionStatus, ToolRequest, ToolResult
+
 
 @pytest.mark.asyncio
 async def test_local_gateway_delegates_to_tool_executor():
     executor = AsyncMock()
 
-    expected = ToolResult(
-        status=ToolExecutionStatus.SUCCESS,
-        output="file contents"
-    )
+    expected = ToolResult(status=ToolExecutionStatus.SUCCESS, output="file contents")
 
     executor.execute.return_value = expected
 

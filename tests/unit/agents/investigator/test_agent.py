@@ -55,15 +55,10 @@ async def test_investigator_agent_executes_plan() -> None:
 
     assert len(gateway.execute.call_args_list) == 2
 
-    assert (
-        gateway.execute.call_args_list[0].args[0].tool_name
-        == "run_tests"
-    )
+    assert gateway.execute.call_args_list[0].args[0].tool_name == "run_tests"
 
-    assert (
-            gateway.execute.call_args_list[1].args[0].tool_name
-            == "read_file"
-    )
+    assert gateway.execute.call_args_list[1].args[0].tool_name == "read_file"
+
 
 @pytest.mark.asyncio
 async def test_investigator_agent_records_failed_tool() -> None:

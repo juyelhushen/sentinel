@@ -40,18 +40,13 @@ async def test_mcp_client_can_discover_and_call_read_file():
 
         assert result.is_error is False
 
-        text = "\n".join(
-            item.text
-            for item in result.content
-            if hasattr(item, "text")
-        )
+        text = "\n".join(item.text for item in result.content if hasattr(item, "text"))
 
         assert "Hello from Sentinel MCP!" in text
 
-
-
     finally:
         await client.close()
+
 
 @pytest.mark.asyncio
 async def test_mcp_read_file_returns_error_for_missing_file():
@@ -79,6 +74,7 @@ async def test_mcp_read_file_returns_error_for_missing_file():
 
     finally:
         await client.close()
+
 
 @pytest.mark.asyncio
 async def test_mcp_read_file_rejects_path_traversal():
@@ -134,23 +130,20 @@ async def test_mcp_client_can_call_search_code():
         assert result.is_error is False
         assert result.content
 
-        text = "\n".join(
-            item.text
-            for item in result.content
-            if hasattr(item, "text")
-        )
+        text = "\n".join(item.text for item in result.content if hasattr(item, "text"))
 
         assert "example.txt" in text
 
     finally:
         await client.close()
 
+
 @pytest.mark.asyncio
 async def test_mcp_client_can_call_run_tests():
     # Set repository root to match other integration tests.
     # Required so MCP server uses correct working directory for relative paths.
     repository_root = Path(__file__).resolve().parents[3]
-    
+
     client = SentinelMCPClient()
 
     try:
@@ -180,11 +173,7 @@ async def test_mcp_client_can_call_run_tests():
         assert result.is_error is False
         assert result.content
 
-        text = "\n".join(
-            item.text
-            for item in result.content
-            if hasattr(item, "text")
-        )
+        text = "\n".join(item.text for item in result.content if hasattr(item, "text"))
 
         assert "passed" in text.lower()
 

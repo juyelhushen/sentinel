@@ -3,7 +3,9 @@ from uuid import uuid4
 from sentinel.domain.tool_execution import ToolExecution
 from sentinel.infrastructure.database.schema import SchemaInitializer
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
-from sentinel.infrastructure.persistence.sqllite.tool_execution_repository import SQLiteToolExecutionRepository
+from sentinel.infrastructure.persistence.sqllite.tool_execution_repository import (
+    SQLiteToolExecutionRepository,
+)
 from sentinel.tools.models import ToolExecutionStatus
 
 
@@ -12,7 +14,7 @@ async def test_save_and_get_by_execution_id(tmp_path):
     database = SQLiteDatabase(tmp_path / "sentinel.db")
     SchemaInitializer(database).initialize()
     repository = SQLiteToolExecutionRepository(database)
-    
+
     execution_id = uuid4()
 
     tool_execution = ToolExecution(

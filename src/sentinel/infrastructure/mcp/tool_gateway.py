@@ -1,32 +1,34 @@
 from sentinel.application.ports.tool_gateway import ToolGateway
 from sentinel.infrastructure.mcp.client import SentinelMCPClient
-from sentinel.tools.models import ToolRequest, ToolResult, ToolExecutionStatus
+from sentinel.tools.models import ToolExecutionStatus, ToolRequest, ToolResult
 
 
 class MCPToolGateway(ToolGateway):
     """Executes Sentinel tools through an MCP server."""
 
-    def __init__(
-            self,
-            client: SentinelMCPClient
-    ) -> None:
+    def __init__(self, client: SentinelMCPClient) -> None:
         self.client = client
 
-    async def execute(
-            self,
-            request:ToolRequest
-    ) -> ToolResult:
+    async def initialize(self) -> None:
+        await self.client.list_tool_names()
+
+    async def execute(self, request: ToolRequest) -> ToolResult:
+
+        if request.tool_name not in self.client.tool_names:
+            return ToolResult(
+                status=ToolExecutionStatus.FAILURE,
+                error=f"MCP tool is not available: {request.tool_name}.",
+                request_id=request.request_id,
+            )
 
         result = await self.client.call_tool(
             request.tool_name,
             request.arguments,
         )
 
-        output = "\n".join(
-            item.text
-            for item in result.content
-            if hasattr(item, "text")
-        )
+        text_items = [item.text for item in result.content if hasattr(item, "text")]
+
+        output = "\n".join(text_items[:2])
 
         if result.is_error:
             return ToolResult(

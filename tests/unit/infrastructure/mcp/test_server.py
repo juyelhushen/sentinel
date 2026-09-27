@@ -48,6 +48,7 @@ async def test_search_code_tool_is_registered():
     assert "read_file" in tool_names
     assert "search_code" in tool_names
 
+
 @pytest.mark.asyncio
 async def test_run_tests_tool_is_registered():
     tool_executor = AsyncMock()
@@ -62,4 +63,3 @@ async def test_run_tests_tool_is_registered():
     tool_names = {tool.name for tool in tools}
 
     assert "run_tests" in tool_names
-

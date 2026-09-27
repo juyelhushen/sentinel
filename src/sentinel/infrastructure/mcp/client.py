@@ -1,4 +1,5 @@
 from contextlib import AsyncExitStack
+from json import tool
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -10,6 +11,7 @@ class SentinelMCPClient:
     def __init__(self) -> None:
         self._exit_stack = AsyncExitStack()
         self._session: ClientSession | None = None
+        self._tool_names: set[str] = set()
 
     async def connect(
         self,
@@ -42,19 +44,23 @@ class SentinelMCPClient:
 
         return result.tools
 
-    async def call_tool(
-            self,
-            name: str,
-            args: dict
-    ):
+    async def call_tool(self, name: str, args: dict):
         if self._session is None:
             raise RuntimeError("MCP client is not connected.")
 
-        return await self._session.call_tool(
-            name,
-            args
-        )
+        return await self._session.call_tool(name, args)
 
     async def close(self) -> None:
         await self._exit_stack.aclose()
-    
+
+    async def list_tool_names(self) -> set[str]:
+        if self._session is None:
+            raise RuntimeError("MCP client is not connected.")
+
+        result = await self._session.list_tools()
+        self._tool_names = {tool.name for tool in result.tools}
+        return set(self._tool_names)
+
+    @property
+    def tool_names(self) -> frozenset[str]:
+        return frozenset(self._tool_names)

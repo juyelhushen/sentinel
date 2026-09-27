@@ -3,8 +3,8 @@ from sentinel.infrastructure.mcp.tool_gateway import MCPToolGateway
 
 
 async def create_mcp_tool_gateway(
-        command: str,
-        args: list[str],
+    command: str,
+    args: list[str],
 ) -> tuple[SentinelMCPClient, MCPToolGateway]:
     client = SentinelMCPClient()
 
@@ -12,6 +12,8 @@ async def create_mcp_tool_gateway(
         command=command,
         args=args,
     )
+
+    await client.list_tool_names()
 
     gateway = MCPToolGateway(client)
 

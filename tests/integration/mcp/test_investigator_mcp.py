@@ -21,6 +21,8 @@ async def test_investigator_executes_plan_through_mcp():
             ],
         )
 
+        await client.list_tool_names()
+
         gateway = MCPToolGateway(client)
 
         investigator = InvestigatorAgent(

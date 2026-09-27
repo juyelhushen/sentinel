@@ -16,7 +16,7 @@ def create_tool_executor(
     audit_repository: ToolExecutionRepository | None = None,
 ) -> ToolExecutor:
     """Create the canonical tool executor with all registered tools.
-    
+
     Registers:
     - read_file: Read file contents
     - search_code: Search code with semantic understanding
@@ -26,25 +26,15 @@ def create_tool_executor(
     """
     registry = ToolRegistry()
 
-    registry.register(
-        ReadFileTool(repository_root=repository_root)
-    )
+    registry.register(ReadFileTool(repository_root=repository_root))
 
-    registry.register(
-        SearchCodeTool(repository_root=repository_root)
-    )
+    registry.register(SearchCodeTool(repository_root=repository_root))
 
-    registry.register(
-        RunTestsTool(repository_root=repository_root)
-    )
+    registry.register(RunTestsTool(repository_root=repository_root))
 
-    registry.register(
-        ListDirectoryTool(repository_root=repository_root)
-    )
+    registry.register(ListDirectoryTool(repository_root=repository_root))
 
-    registry.register(
-        SearchFilesTool(repository_root=repository_root)
-    )
+    registry.register(SearchFilesTool(repository_root=repository_root))
 
     policy = ToolPolicy(
         allowed_tools={

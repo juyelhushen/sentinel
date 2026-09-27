@@ -56,11 +56,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
                 str(execution.id),
                 str(execution.incident_id),
                 execution.status.value,
-                (
-                    execution.started_at.isoformat()
-                    if execution.started_at
-                    else None
-                ),
+                (execution.started_at.isoformat() if execution.started_at else None),
                 (
                     execution.completed_at.isoformat()
                     if execution.completed_at

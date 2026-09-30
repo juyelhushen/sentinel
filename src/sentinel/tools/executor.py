@@ -27,10 +27,13 @@ class ToolExecutor:
 
         started_at = datetime.now(UTC)
 
-        if not self._registry.contains(request.tool_name):
+        # Policy enforcement is the security boundary: deny before registry lookup
+        # or tool execution so MCP and local tool callers both pass through the same
+        # authorization check.
+        if not self._policy.is_allowed(request):
             result = ToolResult(
-                status=ToolExecutionStatus.FAILURE,
-                error=f"Unknown tool: {request.tool_name}",
+                status=ToolExecutionStatus.DENIED,
+                error=f"Tool execution denied: {request.tool_name}",
                 request_id=request.request_id,
             )
 
@@ -42,10 +45,13 @@ class ToolExecutor:
 
             return result
 
-        if not self._policy.is_allowed(request):
+        # A policy-approved name still must be registered before execution.
+        # This preserves the registry as the second enforcement gate without
+        # creating a duplicate policy system inside the MCP server.
+        if not self._registry.contains(request.tool_name):
             result = ToolResult(
-                status=ToolExecutionStatus.DENIED,
-                error=f"Tool execution denied: {request.tool_name}",
+                status=ToolExecutionStatus.FAILURE,
+                error=f"Tool is not registered: {request.tool_name}",
                 request_id=request.request_id,
             )
 

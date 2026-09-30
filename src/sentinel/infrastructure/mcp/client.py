@@ -1,8 +1,9 @@
 from contextlib import AsyncExitStack
-from json import tool
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+from sentinel.infrastructure.mcp.models import MCPTool
 
 
 class SentinelMCPClient:
@@ -11,7 +12,7 @@ class SentinelMCPClient:
     def __init__(self) -> None:
         self._exit_stack = AsyncExitStack()
         self._session: ClientSession | None = None
-        self._tool_names: set[str] = set()
+        self._tools: dict[str, MCPTool] = {}
 
     async def connect(
         self,
@@ -36,13 +37,13 @@ class SentinelMCPClient:
 
         await self._session.initialize()
 
-    async def list_tools(self):
-        if self._session is None:
-            raise RuntimeError("MCP client is not connected.")
-
-        result = await self._session.list_tools()
-
-        return result.tools
+    # async def list_tools(self):
+    #     if self._session is None:
+    #         raise RuntimeError("MCP client is not connected.")
+    #
+    #     result = await self._session.list_tools()
+    #
+    #     return result.tools
 
     async def call_tool(self, name: str, args: dict):
         if self._session is None:
@@ -53,14 +54,39 @@ class SentinelMCPClient:
     async def close(self) -> None:
         await self._exit_stack.aclose()
 
-    async def list_tool_names(self) -> set[str]:
+
+    async def list_tools(self) -> tuple[MCPTool, ...]:
         if self._session is None:
             raise RuntimeError("MCP client is not connected.")
 
         result = await self._session.list_tools()
-        self._tool_names = {tool.name for tool in result.tools}
-        return set(self._tool_names)
+
+        tools = tuple(
+            MCPTool(
+                name=tool.name,
+                description=tool.description or "",
+                input_schema=dict(tool.input_schema or {}),
+            )
+            for tool in result.tools
+        )
+
+        self._tools = {tool.name: tool for tool in tools}
+
+        return tools
+
+    def get_tool(self, name: str) -> MCPTool:
+        try:
+            return self._tools[name]
+        except KeyError as exc:
+            raise ValueError(f"MCP tool is not discovered: {name}") from exc
+
+    @property
+    def tools(self) -> tuple[MCPTool, ...]:
+        return tuple(self._tools.values())
 
     @property
     def tool_names(self) -> frozenset[str]:
-        return frozenset(self._tool_names)
+        return frozenset(self._tools)
+
+
+

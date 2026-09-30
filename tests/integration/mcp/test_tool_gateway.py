@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from sentinel.infrastructure.mcp.client import SentinelMCPClient
 from sentinel.infrastructure.mcp.tool_gateway import MCPToolGateway
 from sentinel.tools.models import ToolExecutionStatus, ToolRequest
 
@@ -65,6 +66,33 @@ async def test_mcp_gateway_translates_mcp_error():
 
 
 @pytest.mark.asyncio
+async def test_mcp_gateway_preserves_denied_status():
+    client = AsyncMock()
+    client.tool_names = {"read_file"}
+
+    client.call_tool.return_value = SimpleNamespace(
+        is_error=True,
+        content=[
+            SimpleNamespace(text="[DENIED] Tool execution denied: read_file"),
+        ],
+    )
+
+    gateway = MCPToolGateway(client)
+
+    request = ToolRequest(
+        tool_name="read_file",
+        arguments={"path": "private.txt"},
+    )
+
+    result = await gateway.execute(request)
+
+    assert result.status == ToolExecutionStatus.DENIED
+    assert result.succeeded is False
+    assert result.error == "[DENIED] Tool execution denied: read_file"
+    assert result.request_id == request.request_id
+
+
+@pytest.mark.asyncio
 async def test_mcp_gateway_combines_text_content():
     client = AsyncMock()
     client.tool_names = {"read_file"}
@@ -87,4 +115,25 @@ async def test_mcp_gateway_combines_text_content():
 
     result = await gateway.execute(request)
 
-    assert result.output == "line 1\nline 2"
+    assert result.output == "line 1\nline 2\nfile contents"
+
+@pytest.mark.asyncio
+async def test_execute_rejects_unknown_tool() -> None:
+    client = AsyncMock(spec=SentinelMCPClient)
+    client.tool_names = frozenset({"read_file", "search_code", "run_tests"})
+
+    gateway = MCPToolGateway(client)
+
+    request = ToolRequest(
+        tool_name="unknown_tool",
+        arguments={},
+    )
+
+    result = await gateway.execute(request)
+
+    assert result.status == ToolExecutionStatus.FAILURE
+    assert result.error == "MCP tool is not available: unknown_tool."
+
+    client.call_tool.assert_not_awaited()
+
+

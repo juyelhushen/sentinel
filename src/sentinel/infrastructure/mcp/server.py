@@ -3,7 +3,7 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 
 from sentinel.tools.executor import ToolExecutor
-from sentinel.tools.models import ToolRequest
+from sentinel.tools.models import ToolExecutionStatus, ToolRequest
 
 
 class SentinelMCPServer:
@@ -18,6 +18,13 @@ class SentinelMCPServer:
 
         self.register_tools()
 
+    def _raise_tool_error(self, result, tool_name: str) -> None:
+        """Raise a structured MCP error that preserves the denial/failure distinction."""
+        if result.status == ToolExecutionStatus.DENIED:
+            raise RuntimeError(f"[DENIED] Tool execution denied: {tool_name}")
+
+        raise RuntimeError(result.error or f"{tool_name} execution failed.")
+
     def register_tools(self) -> None:
 
         @self._server.tool()
@@ -28,7 +35,7 @@ class SentinelMCPServer:
             result = await self.tool_executor.execute(request)
 
             if not result.succeeded:
-                raise RuntimeError(result.error or "read_file execution failed.")
+                self._raise_tool_error(result, "read_file")
 
             return str(result.output)
 
@@ -46,7 +53,7 @@ class SentinelMCPServer:
             result = await self.tool_executor.execute(request)
 
             if not result.succeeded:
-                raise RuntimeError(result.error or "search_code execution failed.")
+                self._raise_tool_error(result, "search_code")
 
             return str(result.output)
 
@@ -62,7 +69,7 @@ class SentinelMCPServer:
             result = await self.tool_executor.execute(request)
 
             if not result.succeeded:
-                raise RuntimeError(result.error or "run_tests execution failed.")
+                self._raise_tool_error(result, "run_tests")
 
             return str(result.output)
 

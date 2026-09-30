@@ -10,7 +10,7 @@ class MCPToolGateway(ToolGateway):
         self.client = client
 
     async def initialize(self) -> None:
-        await self.client.list_tool_names()
+        await self.client.list_tools()
 
     async def execute(self, request: ToolRequest) -> ToolResult:
 
@@ -21,20 +21,36 @@ class MCPToolGateway(ToolGateway):
                 request_id=request.request_id,
             )
 
-        result = await self.client.call_tool(
-            request.tool_name,
-            request.arguments,
-        )
+        try:
+            result = await self.client.call_tool(
+                request.tool_name,
+                request.arguments,
+            )
+        except Exception as exc:
+            return ToolResult(
+                status=ToolExecutionStatus.FAILURE,
+                error=f"MCP tool execution failed: {exc}",
+                request_id=request.request_id,
+            )
 
         text_items = [item.text for item in result.content if hasattr(item, "text")]
 
-        output = "\n".join(text_items[:2])
+        output = "\n".join(text_items)
 
         if result.is_error:
+            error_text = output or "MCP tool execution failed."
+            if error_text.startswith("[DENIED]"):
+                return ToolResult(
+                    status=ToolExecutionStatus.DENIED,
+                    output=output or None,
+                    error=error_text,
+                    request_id=request.request_id,
+                )
+
             return ToolResult(
                 status=ToolExecutionStatus.FAILURE,
                 output=output or None,
-                error=output or "MCP tool execution failed.",
+                error=error_text,
                 request_id=request.request_id,
             )
 

@@ -20,7 +20,7 @@ async def test_read_file_tool_delegates_to_tool_executor():
         },
     )()
 
-    tool_executor.return_value = result
+    tool_executor.execute.return_value = result
 
     mcp_server = SentinelMCPServer(
         repository_root=Path("."),

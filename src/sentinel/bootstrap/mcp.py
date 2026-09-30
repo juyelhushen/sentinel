@@ -13,7 +13,7 @@ async def create_mcp_tool_gateway(
         args=args,
     )
 
-    await client.list_tool_names()
+    await client.list_tools()
 
     gateway = MCPToolGateway(client)
 

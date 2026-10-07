@@ -3,6 +3,7 @@ from sentinel.application.repair.repair_parser import parse_repair_plan
 from sentinel.application.repair.repair_prompt import build_repair_prompt
 from sentinel.domain.models.incident import Incident
 from sentinel.domain.repair import RepairPlan
+from sentinel.domain.repair.attempt import RepairAttempt
 from sentinel.llm.base import LLMProvider
 from sentinel.llm.models import LLMRequest
 
@@ -15,10 +16,12 @@ class RepairAgent:
         self,
         incident: Incident,
         investigation: InvestigationResult,
+        previous_attempts: tuple[RepairAttempt, ...] = ()
     ) -> RepairPlan:
         prompt = build_repair_prompt(
             incident=incident,
             investigation=investigation,
+            previous_attempts=previous_attempts,
         )
 
         request = LLMRequest(

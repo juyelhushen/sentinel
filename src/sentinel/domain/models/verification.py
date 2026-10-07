@@ -1,4 +1,4 @@
-from dataclasses import field
+from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -8,6 +8,7 @@ class VerificationStatus(StrEnum):
     FAILED="failed"
 
 
+@dataclass(frozen=True)
 class VerificationResult:
     status: VerificationStatus
     summary: str

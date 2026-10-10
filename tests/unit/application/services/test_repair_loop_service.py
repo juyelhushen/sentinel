@@ -1,11 +1,11 @@
 import pytest
+
 from sentinel.agents.investigator.models import InvestigationResult
 from sentinel.application.repair.repair_agent import RepairAgent
 from sentinel.domain.models.incident import Incident
 from sentinel.domain.models.verification import VerificationResult, VerificationStatus
 from sentinel.domain.repair.attempt import RepairAttempt
 from sentinel.domain.repair.models import RepairPlan, RepairStep, RepairStepType
-
 from tests.unit.application.agents.test_repair_agent import FakeLLMProvider
 
 

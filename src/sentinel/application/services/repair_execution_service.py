@@ -1,6 +1,6 @@
 from sentinel.application.ports.tool_gateway import ToolGateway
 from sentinel.domain.repair import RepairPlan
-from sentinel.tools.models import ToolResult, ToolRequest
+from sentinel.tools.models import ToolRequest, ToolResult
 
 
 class RepairExecutionService:

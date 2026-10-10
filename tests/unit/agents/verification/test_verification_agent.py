@@ -1,4 +1,5 @@
 import pytest
+
 from sentinel.agents.verification.verification_agent import VerificationAgent
 from sentinel.application.ports.tool_gateway import ToolGateway
 from sentinel.domain.models.verification import VerificationStatus

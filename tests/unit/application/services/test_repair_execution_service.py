@@ -1,17 +1,15 @@
-from uuid import uuid4
 
 import pytest
 
 from sentinel.application.services.repair_execution_service import (
     RepairExecutionService,
 )
-
 from sentinel.domain.repair import (
     RepairPlan,
     RepairStep,
     RepairStepType,
 )
-from sentinel.tools.models import ToolResult, ToolExecutionStatus
+from sentinel.tools.models import ToolExecutionStatus, ToolResult
 
 
 class FakeToolGateway:

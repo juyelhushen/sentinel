@@ -1,5 +1,7 @@
 from sentinel.application.repair.repair_agent import RepairAgent
-from sentinel.application.services.repair_execution_service import RepairExecutionService
+from sentinel.application.services.repair_execution_service import (
+    RepairExecutionService,
+)
 from sentinel.domain.repair.attempt import RepairAttempt
 from sentinel.workflows.graph_state import SentinelGraphState
 

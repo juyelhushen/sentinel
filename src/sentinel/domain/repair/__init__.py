@@ -1,16 +1,15 @@
+from sentinel.domain.repair.attempt import RepairAttempt
 from sentinel.domain.repair.models import (
     RepairPlan,
     RepairStep,
     RepairStepType,
 )
-
 from sentinel.domain.repair.retry import RepairRetryPolicy
-from sentinel.domain.repair.attempt import RepairAttempt
 
 __all__ = [
+    'RepairAttempt',
     "RepairPlan",
+    'RepairRetryPolicy',
     "RepairStep",
     "RepairStepType",
-    'RepairRetryPolicy',
-    'RepairAttempt',
 ]

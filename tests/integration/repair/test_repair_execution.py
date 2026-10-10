@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.application.services.repair_execution_service import RepairExecutionService
+from sentinel.application.services.repair_execution_service import (
+    RepairExecutionService,
+)
 from sentinel.application.tools.apply_patch import ApplyPatchTool
 from sentinel.application.tools.local_gateway import LocalToolGateway
 from sentinel.domain.repair import RepairPlan, RepairStep, RepairStepType

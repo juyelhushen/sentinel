@@ -1,0 +1,47 @@
+
+name: Sentinel CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-tests:
+    name: Quality and Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Check formatting
+        run: uv run ruff format --check src tests
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Type check
+        run: uv run mypy src
+
+      - name: Run tests
+        run: uv run pytest -q -m "not integration"

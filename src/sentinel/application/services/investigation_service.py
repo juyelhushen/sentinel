@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sentinel.application.ports.execution_repository import ExecutionRepository
 from sentinel.application.ports.incident_repository import IncidentRepository
+from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.models.execution import Execution
 from sentinel.domain.models.incident import Incident
 from sentinel.workflows.graph_state import SentinelGraphState
@@ -35,7 +36,7 @@ class InvestigationService:
         incident.start_investigation()
         incident.add_execution(execution)
 
-        await self._incident_repository.save(incident)
+        await self._incident_repository.persist(incident)
         await self._execution_repository.save(execution)
 
         state = self._build_initial_state(
@@ -50,7 +51,7 @@ class InvestigationService:
             incident.fail()
 
             await self._execution_repository.save(execution)
-            await self._incident_repository.save(incident)
+            await self._incident_repository.persist(incident)
 
             raise
 
@@ -59,13 +60,13 @@ class InvestigationService:
         if execution is None:
             raise RuntimeError("Workflow completed without an execution.")
 
-        if result.get("error") is None:
-            incident.begin_verification()
-        else:
+        if result.get("error") is not None:
             incident.fail()
+        elif incident.status == IncidentStatus.INVESTIGATING:
+            incident.begin_verification()
 
         await self._execution_repository.save(execution)
-        await self._incident_repository.save(incident)
+        await self._incident_repository.persist(incident)
 
         result["execution"] = execution
         result["incident"] = incident

@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 from sentinel.application.ports.repair_repository import RepairRepository
 from sentinel.domain.models.verification import VerificationResult, VerificationStatus
+from sentinel.domain.repair.approval import RepairApproval, RepairApprovalStatus
 from sentinel.domain.repair.attempt import RepairAttempt
 from sentinel.domain.repair.models import RepairPlan, RepairStep, RepairStepType
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
@@ -31,14 +32,20 @@ class SQLiteRepairRepository(RepairRepository):
                     execution_id,
                     attempt_number,
                     plan_summary,
+                    approval_status,
+                    approval_reason,
+                    execution_error,
                     created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     repair_plan_id = excluded.repair_plan_id,
                     execution_id = excluded.execution_id,
                     attempt_number = excluded.attempt_number,
-                    plan_summary = excluded.plan_summary
+                    plan_summary = excluded.plan_summary,
+                    approval_status = excluded.approval_status,
+                    approval_reason = excluded.approval_reason,
+                    execution_error = excluded.execution_error
                 """,
                 (
                     str(attempt.id),
@@ -46,6 +53,9 @@ class SQLiteRepairRepository(RepairRepository):
                     str(execution_id),
                     attempt.attempt_number,
                     attempt.repair_plan.summary,
+                    attempt.approval.status.value if attempt.approval else None,
+                    attempt.approval.reason if attempt.approval else None,
+                    attempt.execution_error,
                     created_at,
                 ),
             )
@@ -126,7 +136,14 @@ class SQLiteRepairRepository(RepairRepository):
 
             attempt_rows = connection.execute(
                 """
-                SELECT id, repair_plan_id, attempt_number, plan_summary
+                SELECT
+                    id,
+                    repair_plan_id,
+                    attempt_number,
+                    plan_summary,
+                    approval_status,
+                    approval_reason,
+                    execution_error
                 FROM repair_attempts
                 WHERE execution_id = ?
                 ORDER BY attempt_number ASC
@@ -188,9 +205,7 @@ class SQLiteRepairRepository(RepairRepository):
                 if verification_row is not None:
                     verification = VerificationResult(
                         id=UUID(verification_row["id"]),
-                        status=VerificationStatus(
-                            verification_row["status"]
-                        ),
+                        status=VerificationStatus(verification_row["status"]),
                         summary=verification_row["summary"],
                         test_output=verification_row["test_output"],
                     )
@@ -201,6 +216,17 @@ class SQLiteRepairRepository(RepairRepository):
                         attempt_number=attempt_row["attempt_number"],
                         repair_plan=plan,
                         verification=verification,
+                        approval=(
+                            RepairApproval(
+                                status=RepairApprovalStatus(
+                                    attempt_row["approval_status"]
+                                ),
+                                reason=attempt_row["approval_reason"] or "",
+                            )
+                            if attempt_row["approval_status"] is not None
+                            else None
+                        ),
+                        execution_error=attempt_row["execution_error"],
                     )
                 )
 

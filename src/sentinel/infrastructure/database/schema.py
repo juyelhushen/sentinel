@@ -56,6 +56,9 @@ class SchemaInitializer:
                     execution_id TEXT NOT NULL,
                     attempt_number INTEGER NOT NULL,
                     plan_summary TEXT NOT NULL,
+                    approval_status TEXT,
+                    approval_reason TEXT,
+                    execution_error TEXT,
                     created_at TEXT NOT NULL,
                     FOREIGN KEY (execution_id)
                         REFERENCES executions(id)
@@ -104,7 +107,9 @@ class SchemaInitializer:
     def _migrate_repair_schema(self, connection) -> None:
         columns = {
             column[1]: column
-            for column in connection.execute("PRAGMA table_info('repair_attempts')").fetchall()
+            for column in connection.execute(
+                "PRAGMA table_info('repair_attempts')"
+            ).fetchall()
         }
 
         if "repair_plan_id" not in columns:
@@ -115,6 +120,21 @@ class SchemaInitializer:
         if "plan_summary" not in columns:
             connection.execute(
                 "ALTER TABLE repair_attempts ADD COLUMN plan_summary TEXT"
+            )
+
+        if "approval_status" not in columns:
+            connection.execute(
+                "ALTER TABLE repair_attempts ADD COLUMN approval_status TEXT"
+            )
+
+        if "approval_reason" not in columns:
+            connection.execute(
+                "ALTER TABLE repair_attempts ADD COLUMN approval_reason TEXT"
+            )
+
+        if "execution_error" not in columns:
+            connection.execute(
+                "ALTER TABLE repair_attempts ADD COLUMN execution_error TEXT"
             )
 
         connection.execute(

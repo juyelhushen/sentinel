@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 
@@ -110,9 +110,13 @@ async def test_run_tests_returns_success(
         "pytest",
         str(tests_path.resolve()),
         cwd=str(tmp_path.resolve()),
+        env=ANY,
         stdout=pytest.importorskip("asyncio").subprocess.PIPE,
         stderr=pytest.importorskip("asyncio").subprocess.PIPE,
     )
+
+    subprocess_environment = mock_create_process.call_args.kwargs["env"]
+    assert subprocess_environment["PYTHONPATH"].split(";")[0] == str(tmp_path.resolve())
 
 
 @pytest.mark.asyncio

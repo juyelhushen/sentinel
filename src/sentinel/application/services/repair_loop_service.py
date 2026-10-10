@@ -51,6 +51,20 @@ class RepairLoopService:
                 )
                 break
 
+            failed_result = next(
+                (result for result in results if not result.succeeded),
+                None,
+            )
+
+            if failed_result is not None:
+                attempts.append(
+                    RepairAttempt(
+                        attempt_number=attempt_number,
+                        repair_plan=plan,
+                    )
+                )
+                break
+
             verification = await self._verification_agent.verify(
                 test_path=verification_path,
             )

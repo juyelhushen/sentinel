@@ -126,7 +126,9 @@ async def test_sentinel_graph_runs_repair_nodes_with_langgraph_state(
     service.execute.return_value = (ToolResult(status=ToolExecutionStatus.SUCCESS),)
     verification_agent = AsyncMock(spec=VerificationAgent)
     verifications = [
-        VerificationResult(status=status, summary="Tests finished", test_output="output")
+        VerificationResult(
+            status=status, summary="Tests finished", test_output="output"
+        )
         for status in statuses
     ]
     verification_agent.verify.side_effect = verifications
@@ -139,7 +141,9 @@ async def test_sentinel_graph_runs_repair_nodes_with_langgraph_state(
         verification_path="tests/test_order.py",
         retry_policy=RepairRetryPolicy(max_attempts=max_attempts),
     )
-    incident = Incident(title="Failure", description="Null handling", repository="sentinel")
+    incident = Incident(
+        title="Failure", description="Null handling", repository="sentinel"
+    )
 
     result = await graph.ainvoke({"incident": incident})
 
@@ -147,7 +151,10 @@ async def test_sentinel_graph_runs_repair_nodes_with_langgraph_state(
     assert len(attempts) == len(statuses)
     assert result["execution"].status == expected_status
     assert result["verification"] is verifications[-1]
-    assert result["error"] is None
+    if expected_status == ExecutionStatus.COMPLETED:
+        assert result["error"] is None
+    else:
+        assert "retry limit" in result["error"].lower()
     assert service.execute.await_count == len(statuses)
     assert verification_agent.verify.await_count == len(statuses)
     for index, call in enumerate(repair_agent.create_plan.await_args_list):

@@ -1,15 +1,24 @@
+from typing import Any, cast
+
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 
 from sentinel.agents.investigator.agent import InvestigatorAgent
 from sentinel.agents.planner.agent import PlannerAgent
 from sentinel.agents.verification.verification_agent import VerificationAgent
+from sentinel.application.ports.execution_repository import ExecutionRepository
+from sentinel.application.ports.incident_repository import IncidentRepository
+from sentinel.application.ports.repair_approval_gate import RepairApprovalGate
+from sentinel.application.ports.repair_repository import RepairRepository
 from sentinel.application.repair.repair_agent import RepairAgent
 from sentinel.application.services.repair_execution_service import (
     RepairExecutionService,
 )
+from sentinel.domain.repair.approval import RepairApproval, RepairApprovalStatus
+from sentinel.domain.repair.models import RepairPlan
 from sentinel.domain.repair.retry import RepairRetryPolicy
 from sentinel.workflows.graph_state import SentinelGraphState
+from sentinel.workflows.nodes.approval import create_repair_approval_node
 from sentinel.workflows.nodes.complete_execution import execution_complete_node
 from sentinel.workflows.nodes.execution import execution_start_node
 from sentinel.workflows.nodes.fail_execution import execution_fail_node
@@ -35,7 +44,11 @@ def create_sentinel_graph(
     verification_agent: VerificationAgent | None = None,
     verification_path: str = "tests",
     retry_policy: RepairRetryPolicy | None = None,
-):
+    approval_gate: RepairApprovalGate | None = None,
+    repair_repository: RepairRepository | None = None,
+    incident_repository: IncidentRepository | None = None,
+    execution_repository: ExecutionRepository | None = None,
+) -> Any:
     """Create Sentinel's LangGraph workflow."""
 
     repair_enabled = any(
@@ -58,13 +71,42 @@ def create_sentinel_graph(
 
     graph = StateGraph(SentinelGraphState)
 
+    async def start_execution(state: SentinelGraphState) -> dict[str, Any]:
+        update = execution_start_node(state)
+        incident = state.get("incident")
+        if incident_repository is not None and incident is not None:
+            await incident_repository.persist(incident)
+        if execution_repository is not None:
+            await execution_repository.save(update["execution"])
+        update["repair_enabled"] = repair_enabled
+        return update
+
+    async def complete_execution(state: SentinelGraphState) -> dict[str, Any]:
+        update = execution_complete_node(state)
+        incident = state.get("incident")
+        if incident_repository is not None and incident is not None:
+            await incident_repository.persist(incident)
+        if execution_repository is not None:
+            await execution_repository.save(update["execution"])
+        return update
+
+    async def fail_execution(state: SentinelGraphState) -> dict[str, Any]:
+        update = execution_fail_node(state)
+        incident = state.get("incident")
+        if incident_repository is not None and incident is not None:
+            await incident_repository.persist(incident)
+        execution = update.get("execution")
+        if execution is not None and execution_repository is not None:
+            await execution_repository.save(execution)
+        return update
+
     # ---------------------------------------------------------
     # 1. Execution lifecycle
     # ---------------------------------------------------------
 
     graph.add_node(
         "execution_start",
-        execution_start_node,
+        start_execution,
     )
 
     # ---------------------------------------------------------
@@ -95,9 +137,31 @@ def create_sentinel_graph(
             repair_plan_node(repair_agent),
         )
 
-    # ---------------------------------------------------------
-    # 4. Repair execution
-    # ---------------------------------------------------------
+        if approval_gate is None:
+
+            class AutoApproveGate(RepairApprovalGate):
+                async def approve(self, repair_plan: RepairPlan) -> RepairApproval:
+                    return RepairApproval(RepairApprovalStatus.APPROVED)
+
+            effective_approval_gate: RepairApprovalGate = AutoApproveGate()
+        else:
+            effective_approval_gate = approval_gate
+
+        graph.add_node(
+            "repair_approval",
+            cast(Any, create_repair_approval_node(effective_approval_gate)),
+        )
+
+        async def record_repair_attempt(
+            state: SentinelGraphState,
+        ) -> dict[str, Any]:
+            return await record_repair_attempt_node(state, repair_repository)
+
+        graph.add_node("record_repair_attempt", record_repair_attempt)
+
+        # ---------------------------------------------------------
+        # 4. Repair execution
+        # ---------------------------------------------------------
 
         graph.add_node(
             "repair",
@@ -106,9 +170,9 @@ def create_sentinel_graph(
             ),
         )
 
-    # ---------------------------------------------------------
-    # 5. Verification
-    # ---------------------------------------------------------
+        # ---------------------------------------------------------
+        # 5. Verification
+        # ---------------------------------------------------------
 
         graph.add_node(
             "verification",
@@ -122,23 +186,18 @@ def create_sentinel_graph(
     # 6. Record repair attempt
     # ---------------------------------------------------------
 
-        graph.add_node(
-            "record_repair_attempt",
-            record_repair_attempt_node,
-        )
-
     # ---------------------------------------------------------
     # 7. Execution completion / failure
     # ---------------------------------------------------------
 
     graph.add_node(
         "execution_complete",
-        execution_complete_node,
+        complete_execution,
     )
 
     graph.add_node(
         "execution_fail",
-        execution_fail_node,
+        fail_execution,
     )
 
     # ---------------------------------------------------------
@@ -184,22 +243,26 @@ def create_sentinel_graph(
     if repair_enabled:
         graph.add_edge(
             "repair_plan",
-            "repair",
+            "repair_approval",
         )
 
-        graph.add_edge(
-            "repair",
-            "verification",
+        def route_after_approval(state: SentinelGraphState) -> str:
+            if state.get("error") is not None:
+                return "rejected"
+            return "approved"
+
+        graph.add_conditional_edges(
+            "repair_approval",
+            route_after_approval,
+            {
+                "approved": "repair",
+                "rejected": "record_repair_attempt",
+            },
         )
 
-        graph.add_edge(
-            "verification",
-            "record_repair_attempt",
-        )
-
-    # ---------------------------------------------------------
-    # 9. Verification decision / retry loop
-    # ---------------------------------------------------------
+        # ---------------------------------------------------------
+        # 9. Verification decision / retry loop
+        # ---------------------------------------------------------
 
         graph.add_conditional_edges(
             "record_repair_attempt",
@@ -211,6 +274,20 @@ def create_sentinel_graph(
                 "retry": "repair_plan",
                 "failure": "execution_fail",
             },
+        )
+
+        graph.add_conditional_edges(
+            "repair",
+            lambda state: "verify" if state.get("error") is None else "record",
+            {
+                "verify": "verification",
+                "record": "record_repair_attempt",
+            },
+        )
+
+        graph.add_edge(
+            "verification",
+            "record_repair_attempt",
         )
 
     # ---------------------------------------------------------

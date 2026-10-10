@@ -1,4 +1,3 @@
-
 import sqlite3
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -43,6 +42,9 @@ def create_test_database(database_path: Path) -> SQLiteDatabase:
                 execution_id TEXT NOT NULL,
                 attempt_number INTEGER NOT NULL,
                 plan_summary TEXT NOT NULL,
+                approval_status TEXT,
+                approval_reason TEXT,
+                execution_error TEXT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (execution_id)
                     REFERENCES executions(id)
@@ -318,17 +320,18 @@ async def test_cascade_delete_removes_repair_history(
     assert await repository.get_attempts(execution_id) == []
 
     with database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM repair_attempts"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute("SELECT COUNT(*) FROM repair_attempts").fetchone()[0]
+            == 0
+        )
 
-        assert connection.execute(
-            "SELECT COUNT(*) FROM repair_steps"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute("SELECT COUNT(*) FROM repair_steps").fetchone()[0] == 0
+        )
 
-        assert connection.execute(
-            "SELECT COUNT(*) FROM verifications"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute("SELECT COUNT(*) FROM verifications").fetchone()[0] == 0
+        )
 
 
 @pytest.mark.asyncio
@@ -357,6 +360,7 @@ async def test_failed_save_rolls_back_all_changes(
     assert await repository.get_attempts(execution_id) == []
 
     with database.connect() as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM repair_attempts"
-        ).fetchone()[0] == 0
+        assert (
+            connection.execute("SELECT COUNT(*) FROM repair_attempts").fetchone()[0]
+            == 0
+        )

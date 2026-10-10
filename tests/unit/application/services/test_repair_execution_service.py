@@ -1,6 +1,7 @@
 
 import pytest
 
+from sentinel.application.services.repair_loop_service import RepairLoopService
 from sentinel.application.services.repair_execution_service import (
     RepairExecutionService,
 )
@@ -9,6 +10,8 @@ from sentinel.domain.repair import (
     RepairStep,
     RepairStepType,
 )
+from sentinel.domain.repair.retry import RepairRetryPolicy
+from sentinel.domain.models.verification import VerificationResult, VerificationStatus
 from sentinel.tools.models import ToolExecutionStatus, ToolResult
 
 
@@ -132,3 +135,58 @@ async def test_empty_repair_plan_returns_no_results() -> None:
 
     assert results == ()
     assert gateway.requests == []
+
+
+@pytest.mark.asyncio
+async def test_repair_loop_skips_verification_after_failed_step() -> None:
+    class FakeRepairAgent:
+        async def create_plan(self, **kwargs):
+            return RepairPlan(
+                summary="Fix issue",
+                steps=(create_step(1, "src/service.py"),),
+            )
+
+    class FakeVerificationAgent:
+        def __init__(self):
+            self.calls = 0
+
+        async def verify(self, test_path: str):
+            self.calls += 1
+            return VerificationResult(
+                status=VerificationStatus.PASSED,
+                summary="Passed",
+                test_output="ok",
+            )
+
+    class FakeGateway:
+        def __init__(self):
+            self.calls = 0
+
+        async def execute(self, request):
+            self.calls += 1
+            return ToolResult(
+                status=ToolExecutionStatus.FAILURE,
+                error="Patch context does not match.",
+                request_id=request.request_id,
+            )
+
+    gateway = FakeGateway()
+    verification_agent = FakeVerificationAgent()
+
+    service = RepairLoopService(
+        repair_agent=FakeRepairAgent(),
+        repair_execution_service=RepairExecutionService(tool_gateway=gateway),
+        verification_agent=verification_agent,
+        retry_policy=RepairRetryPolicy(max_attempts=3),
+    )
+
+    attempts = await service.repair_and_verify(
+        incident=object(),
+        investigation=object(),
+        verification_path="tests",
+    )
+
+    assert len(attempts) == 1
+    assert attempts[0].verification is None
+    assert gateway.calls == 1
+    assert verification_agent.calls == 0

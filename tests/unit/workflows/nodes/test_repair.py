@@ -115,7 +115,10 @@ async def test_repair_node_reads_plan_and_reports_execution_result(
     result = await node({"repair_plan": repair_plan})
 
     service.execute.assert_awaited_once_with(repair_plan)
-    assert result == {"error": expected_error}
+    assert result == {
+        "error": expected_error,
+        "verification": None,
+    }
 
 
 @pytest.mark.asyncio

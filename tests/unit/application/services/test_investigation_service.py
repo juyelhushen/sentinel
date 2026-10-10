@@ -14,6 +14,9 @@ class FakeIncidentRepository:
     async def save(self, incident):
         self.saved.append(incident)
 
+    async def persist(self, incident):
+        self.saved.append(incident)
+
     async def get_by_id(self, incident_id):
         if self.incident.id == incident_id:
             return self.incident
@@ -57,6 +60,15 @@ class FailingGraph:
         }
 
 
+class CompletedRepairGraph(FakeGraph):
+    async def ainvoke(self, state):
+        result = await super().ainvoke(state)
+        incident = result["incident"]
+        incident.begin_verification()
+        incident.complete()
+        return result
+
+
 async def test_successful_investigation():
     incident = Incident(
         title="Broken test",
@@ -80,6 +92,25 @@ async def test_successful_investigation():
     assert result["execution"].status == (ExecutionStatus.COMPLETED)
 
     assert result["incident"].status == (IncidentStatus.VERIFYING)
+
+
+async def test_service_preserves_graph_completed_repair_incident():
+    incident = Incident(
+        title="Broken test",
+        description="A test is failing.",
+        repository="sentinel",
+    )
+
+    service = InvestigationService(
+        incident_repository=FakeIncidentRepository(incident),
+        execution_repository=FakeExecutionRepository(),
+        graph=CompletedRepairGraph(),
+    )
+
+    result = await service.investigate(incident.id)
+
+    assert result["error"] is None
+    assert result["incident"].status == IncidentStatus.COMPLETED
 
 
 async def test_failed_investigation():

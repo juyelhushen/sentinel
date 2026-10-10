@@ -48,3 +48,26 @@ async def test_execute_returns_failure_when_mcp_client_raises() -> None:
         "read_file",
         {"path": "example.txt"},
     )
+
+
+@pytest.mark.asyncio
+async def test_execute_preserves_explicit_denial() -> None:
+    class DeniedResult:
+        content = [type("Item", (), {"text": "[DENIED] Tool execution denied: read_file"})()]
+        is_error = True
+
+    client = Mock()
+    client.tool_names = {"read_file"}
+    client.call_tool = AsyncMock(return_value=DeniedResult())
+
+    gateway = MCPToolGateway(client)
+
+    result = await gateway.execute(
+        ToolRequest(
+            tool_name="read_file",
+            arguments={"path": "example.txt"},
+        )
+    )
+
+    assert result.status == ToolExecutionStatus.DENIED
+    assert result.error.startswith("[DENIED]")

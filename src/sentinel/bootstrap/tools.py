@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from sentinel.application.ports.tool_execution_repository import ToolExecutionRepository
+from sentinel.application.tools.apply_patch import ApplyPatchTool
+from sentinel.domain.repair.policy import RepairPolicy
+from sentinel.domain.repair.unified_diff import UnifiedDiffPatchApplier
 from sentinel.tools.executor import ToolExecutor
 from sentinel.tools.filesystem.list_directory import ListDirectoryTool
 from sentinel.tools.filesystem.read_file import ReadFileTool
@@ -36,6 +39,14 @@ def create_tool_executor(
 
     registry.register(SearchFilesTool(repository_root=repository_root))
 
+    registry.register(
+        ApplyPatchTool(
+            repository_root=repository_root,
+            repair_policy=RepairPolicy(repository_root),
+            patch_applier=UnifiedDiffPatchApplier(),
+        )
+    )
+
     policy = ToolPolicy(
         allowed_tools={
             "read_file",
@@ -43,6 +54,7 @@ def create_tool_executor(
             "run_tests",
             "list-directory",
             "search_files",
+            "apply_patch",
         }
     )
 

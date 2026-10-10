@@ -1,4 +1,5 @@
 import asyncio
+import os
 from pathlib import Path
 
 from sentinel.tools.base import Tool
@@ -58,10 +59,17 @@ class RunTestsTool(Tool):
                 request_id=request.request_id,
             )
 
+        environment = os.environ.copy()
+        existing_pythonpath = environment.get("PYTHONPATH")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            part for part in (str(self._repository_root), existing_pythonpath) if part
+        )
+
         process = await asyncio.create_subprocess_exec(
             "pytest",
             str(path),
             cwd=str(self._repository_root),
+            env=environment,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

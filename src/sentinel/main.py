@@ -1,3 +1,5 @@
+import asyncio
+
 from sentinel.application.use_cases.create_incident import (
     CreateIncidentCommand,
     CreateIncidentUseCase,
@@ -19,11 +21,13 @@ def main() -> None:
 
     create_incident = CreateIncidentUseCase(repository)
 
-    incident = create_incident.execute(
-        CreateIncidentCommand(
-            title="Example incident",
-            description="Example Sentinel incident",
-            repository="/workspace/example",
+    incident = asyncio.run(
+        create_incident.execute(
+            CreateIncidentCommand(
+                title="Example incident",
+                description="Example Sentinel incident",
+                repository="/workspace/example",
+            )
         )
     )
 

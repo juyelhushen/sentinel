@@ -1,4 +1,5 @@
 from sentinel.agents.verification.verification_agent import VerificationAgent
+from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.repair.retry import RepairRetryPolicy
 from sentinel.workflows.graph_state import SentinelGraphState
 
@@ -11,6 +12,10 @@ def verification_node(
         if state.get("error") is not None:
             return {"verification": None}
 
+        incident = state.get("incident")
+        if incident is not None and incident.status == IncidentStatus.INVESTIGATING:
+            incident.begin_verification()
+
         verification = await verification_agent.verify(
             test_path=verification_path,
         )
@@ -20,7 +25,7 @@ def verification_node(
         }
 
     return node
-    
+
 
 def verification_router(
     state: SentinelGraphState,

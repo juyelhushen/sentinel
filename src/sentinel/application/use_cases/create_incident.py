@@ -21,7 +21,7 @@ class CreateIncidentUseCase:
     def __init__(self, repository: IncidentRepository) -> None:
         self._repository = repository
 
-    def execute(self, command: CreateIncidentCommand) -> Incident:
+    async def execute(self, command: CreateIncidentCommand) -> Incident:
         """Create and persist an incident."""
         incident = Incident(
             title=command.title,
@@ -29,6 +29,6 @@ class CreateIncidentUseCase:
             repository=command.repository,
         )
 
-        self._repository.save(incident)
+        await self._repository.persist(incident)
 
         return incident

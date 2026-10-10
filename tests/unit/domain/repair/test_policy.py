@@ -81,3 +81,18 @@ def test_rejects_nested_env_file(
         match="protected files",
     ):
         policy.validate_path("config/.env")
+
+
+def test_rejects_symlink_outside_repository(policy: RepairPolicy, tmp_path: Path) -> None:
+    outside = tmp_path.parent / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    link = tmp_path / "linked.txt"
+
+    try:
+        link.symlink_to(outside)
+    except OSError:
+        pytest.skip("Symlinks are not available in this environment.")
+
+    with pytest.raises(ValueError, match="inside the repository"):
+        policy.validate_path("linked.txt")

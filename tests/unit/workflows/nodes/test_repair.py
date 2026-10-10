@@ -4,7 +4,9 @@ import pytest
 
 from sentinel.agents.investigator.models import InvestigationResult
 from sentinel.application.repair.repair_agent import RepairAgent
-from sentinel.application.services.repair_execution_service import RepairExecutionService
+from sentinel.application.services.repair_execution_service import (
+    RepairExecutionService,
+)
 from sentinel.domain.models.incident import Incident
 from sentinel.domain.models.verification import VerificationResult, VerificationStatus
 from sentinel.domain.repair.attempt import RepairAttempt

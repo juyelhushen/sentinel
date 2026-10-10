@@ -1,8 +1,8 @@
 import pytest
 
 from sentinel.application.repair.repair_parser import (
-    parse_repair_plan,
     RepairParsingError,
+    parse_repair_plan,
 )
 from sentinel.domain.repair import RepairStepType
 

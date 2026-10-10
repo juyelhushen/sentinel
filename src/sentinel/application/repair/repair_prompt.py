@@ -4,6 +4,7 @@ from sentinel.agents.investigator.models import InvestigationResult
 from sentinel.domain.models.incident import Incident
 from sentinel.domain.repair.attempt import RepairAttempt
 
+
 @dataclass(frozen=True)
 class RepairPrompt:
     system: str

@@ -1,9 +1,9 @@
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from sentinel.infrastructure.mcp.tool_gateway import MCPToolGateway
-from sentinel.tools.models import ToolRequest, ToolExecutionStatus
+from sentinel.tools.models import ToolExecutionStatus, ToolRequest
 
 
 @pytest.mark.asyncio

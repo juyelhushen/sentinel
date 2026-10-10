@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from sentinel.domain.repair.patch import PatchApplier, PatchApplicationError
+from sentinel.domain.repair.patch import PatchApplicationError, PatchApplier
 from sentinel.domain.repair.policy import RepairPolicy
 from sentinel.tools.base import Tool
-from sentinel.tools.models import ToolRequest, ToolResult, ToolExecutionStatus
+from sentinel.tools.models import ToolExecutionStatus, ToolRequest, ToolResult
 
 
 class ApplyPatchTool(Tool):
@@ -73,7 +73,7 @@ class ApplyPatchTool(Tool):
             original = target_path.read_text(encoding="utf-8")
             modified = self._patch_applier.apply(original, patch)
             target_path.write_text(modified, encoding="utf-8")
-        except UnicodeDecodeError as exc:
+        except UnicodeDecodeError:
             return ToolResult(
                 status=ToolExecutionStatus.FAILURE,
                 error=f"File is not valid UTF-8: {file_path}",

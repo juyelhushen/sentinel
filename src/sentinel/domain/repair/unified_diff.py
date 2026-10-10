@@ -1,4 +1,4 @@
-from sentinel.domain.repair.patch import PatchApplier, PatchApplicationError
+from sentinel.domain.repair.patch import PatchApplicationError, PatchApplier
 
 
 class UnifiedDiffPatchApplier(PatchApplier):

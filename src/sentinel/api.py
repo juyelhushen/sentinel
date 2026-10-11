@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -40,7 +40,7 @@ def resolve_database_path(database_url: str) -> Path:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
 
     repository_root = settings.repository_root.resolve()

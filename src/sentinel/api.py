@@ -1,10 +1,12 @@
+import secrets
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from sentinel.application.use_cases.create_incident import (
@@ -24,6 +26,36 @@ from sentinel.infrastructure.persistence.sqllite.incident_repository import (
 class CreateIncidentRequest(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     description: str = Field(min_length=5, max_length=5000)
+
+
+api_key_header = APIKeyHeader(
+    name="X-API-Key",
+    auto_error=False,
+)
+
+
+async def require_api_key(
+    request: Request,
+    api_key: str | None = Depends(api_key_header),
+) -> None:
+    configured_key = request.app.state.settings.api_key
+
+    if configured_key is None or not configured_key.get_secret_value().strip():
+        raise HTTPException(
+            status_code=503,
+            detail="API authentication is not configured.",
+        )
+
+    expected_key = configured_key.get_secret_value()
+
+    if api_key is None or not secrets.compare_digest(
+        api_key,
+        expected_key,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key.",
+        )
 
 
 def resolve_database_path(database_url: str) -> Path:
@@ -80,7 +112,10 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "sentinel"}
 
 
-@app.get("/health/ollama")
+@app.get(
+    "/health/ollama",
+    dependencies=[Depends(require_api_key)],
+)
 async def ollama_health(request: Request) -> dict[str, str]:
     provider = request.app.state.llm_provider
 
@@ -93,7 +128,11 @@ async def ollama_health(request: Request) -> dict[str, str]:
     return {"status": "ok", "provider": "ollama"}
 
 
-@app.post("/incidents", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/incidents",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_api_key)],
+)
 async def create_incident(
     payload: CreateIncidentRequest,
     request: Request,
@@ -118,7 +157,10 @@ async def create_incident(
     }
 
 
-@app.post("/incidents/{incident_id}/investigate")
+@app.post(
+    "/incidents/{incident_id}/investigate",
+    dependencies=[Depends(require_api_key)],
+)
 async def investigate_incident(
     incident_id: UUID,
     request: Request,

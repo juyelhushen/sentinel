@@ -55,11 +55,13 @@ async def test_mcp_client_discovers_and_builds_tool_cache():
         run_tests.name: run_tests,
     }
 
-    assert client.tool_names == frozenset({
-        "read_file",
-        "search_code",
-        "run_tests",
-    })
+    assert client.tool_names == frozenset(
+        {
+            "read_file",
+            "search_code",
+            "run_tests",
+        }
+    )
     assert {tool.name for tool in client.tools} == {
         "read_file",
         "search_code",

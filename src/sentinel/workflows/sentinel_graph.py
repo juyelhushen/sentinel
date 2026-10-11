@@ -1,7 +1,9 @@
 from typing import Any, cast
 
+from langchain_core.runnables import RunnableLambda
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from sentinel.agents.investigator.agent import InvestigatorAgent
 from sentinel.agents.planner.agent import PlannerAgent
@@ -48,7 +50,9 @@ def create_sentinel_graph(
     repair_repository: RepairRepository | None = None,
     incident_repository: IncidentRepository | None = None,
     execution_repository: ExecutionRepository | None = None,
-) -> Any:
+) -> CompiledStateGraph[
+    SentinelGraphState, None, SentinelGraphState, SentinelGraphState
+]:
     """Create Sentinel's LangGraph workflow."""
 
     repair_enabled = any(
@@ -69,28 +73,36 @@ def create_sentinel_graph(
             "and verification agent."
         )
 
-    graph = StateGraph(SentinelGraphState)
+    graph: StateGraph[
+        SentinelGraphState, None, SentinelGraphState, SentinelGraphState
+    ] = StateGraph(SentinelGraphState)
 
-    async def start_execution(state: SentinelGraphState) -> dict[str, Any]:
+    async def start_execution(state: SentinelGraphState) -> SentinelGraphState:
         update = execution_start_node(state)
         incident = state.get("incident")
         if incident_repository is not None and incident is not None:
             await incident_repository.persist(incident)
         if execution_repository is not None:
-            await execution_repository.save(update["execution"])
+            execution = update.get("execution")
+            if execution is None:
+                raise ValueError("Cannot persist workflow without an execution.")
+            await execution_repository.save(execution)
         update["repair_enabled"] = repair_enabled
         return update
 
-    async def complete_execution(state: SentinelGraphState) -> dict[str, Any]:
+    async def complete_execution(state: SentinelGraphState) -> SentinelGraphState:
         update = execution_complete_node(state)
         incident = state.get("incident")
         if incident_repository is not None and incident is not None:
             await incident_repository.persist(incident)
         if execution_repository is not None:
-            await execution_repository.save(update["execution"])
+            execution = update.get("execution")
+            if execution is None:
+                raise ValueError("Cannot persist workflow without an execution.")
+            await execution_repository.save(execution)
         return update
 
-    async def fail_execution(state: SentinelGraphState) -> dict[str, Any]:
+    async def fail_execution(state: SentinelGraphState) -> SentinelGraphState:
         update = execution_fail_node(state)
         incident = state.get("incident")
         if incident_repository is not None and incident is not None:
@@ -115,12 +127,14 @@ def create_sentinel_graph(
 
     graph.add_node(
         "planner",
-        create_planner_node(planner_agent),
+        RunnableLambda(create_planner_node(planner_agent)),
+        input_schema=SentinelGraphState,
     )
 
     graph.add_node(
         "investigator",
-        create_investigator_node(investigator_agent),
+        RunnableLambda(create_investigator_node(investigator_agent)),
+        input_schema=SentinelGraphState,
     )
 
     # ---------------------------------------------------------
@@ -134,7 +148,8 @@ def create_sentinel_graph(
     ):
         graph.add_node(
             "repair_plan",
-            repair_plan_node(repair_agent),
+            RunnableLambda(repair_plan_node(repair_agent)),
+            input_schema=SentinelGraphState,
         )
 
         if approval_gate is None:
@@ -154,7 +169,7 @@ def create_sentinel_graph(
 
         async def record_repair_attempt(
             state: SentinelGraphState,
-        ) -> dict[str, Any]:
+        ) -> SentinelGraphState:
             return await record_repair_attempt_node(state, repair_repository)
 
         graph.add_node("record_repair_attempt", record_repair_attempt)
@@ -165,9 +180,8 @@ def create_sentinel_graph(
 
         graph.add_node(
             "repair",
-            repair_node(
-                repair_execution_service,
-            ),
+            RunnableLambda(repair_node(repair_execution_service)),
+            input_schema=SentinelGraphState,
         )
 
         # ---------------------------------------------------------
@@ -176,10 +190,8 @@ def create_sentinel_graph(
 
         graph.add_node(
             "verification",
-            verification_node(
-                verification_agent,
-                verification_path,
-            ),
+            RunnableLambda(verification_node(verification_agent, verification_path)),
+            input_schema=SentinelGraphState,
         )
 
     # ---------------------------------------------------------

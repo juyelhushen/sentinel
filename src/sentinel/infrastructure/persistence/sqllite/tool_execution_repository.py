@@ -1,6 +1,7 @@
 import json
 import sqlite3
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sentinel.application.ports.tool_execution_repository import ToolExecutionRepository
@@ -22,13 +23,7 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
     ) -> None:
         """Persist a tool execution."""
 
-        if connection is not None:
-            connection.execute(...)
-            return
-
-        with self._database.connect() as connection:
-            connection.execute(
-                """
+        statement = """
                 INSERT INTO tool_executions (
                     request_id,
                     tool_name,
@@ -41,29 +36,29 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
                     completed_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(tool_execution.request_id),
-                    tool_execution.tool_name,
-                    tool_execution.status.value,
-                    (
-                        str(tool_execution.execution_id)
-                        if tool_execution.execution_id
-                        else None
-                    ),
-                    json.dumps(tool_execution.arguments),
-                    tool_execution.output,
-                    tool_execution.error,
-                    tool_execution.started_at.isoformat(),
-                    (
-                        tool_execution.completed_at.isoformat()
-                        if tool_execution.completed_at
-                        else None
-                    ),
-                ),
-            )
+                """
+        parameters = (
+            str(tool_execution.request_id),
+            tool_execution.tool_name,
+            tool_execution.status.value,
+            str(tool_execution.execution_id) if tool_execution.execution_id else None,
+            json.dumps(tool_execution.arguments),
+            tool_execution.output,
+            tool_execution.error,
+            tool_execution.started_at.isoformat(),
+            (
+                tool_execution.completed_at.isoformat()
+                if tool_execution.completed_at
+                else None
+            ),
+        )
 
-            # connection.commit()
+        if connection is not None:
+            connection.execute(statement, parameters)
+            return
+
+        with self._database.connect() as owned_connection:
+            owned_connection.execute(statement, parameters)
 
     async def get_by_execution_id(self, execution_id: UUID) -> list[ToolExecution]:
         """Return all tool executions belonging to an execution."""
@@ -94,7 +89,7 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
 
     @staticmethod
     def _row_to_tool_execution(
-        row: tuple,
+        row: tuple[Any, ...],
     ) -> ToolExecution:
         """Convert a SQLite row into a ToolExecution domain object."""
 

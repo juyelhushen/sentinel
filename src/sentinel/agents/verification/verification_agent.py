@@ -4,7 +4,7 @@ from sentinel.tools.models import ToolRequest
 
 
 class VerificationAgent:
-    def __init__(self, tool_gateway : ToolGateway) -> None:
+    def __init__(self, tool_gateway: ToolGateway) -> None:
         self._tool_gateway = tool_gateway
 
     async def verify(

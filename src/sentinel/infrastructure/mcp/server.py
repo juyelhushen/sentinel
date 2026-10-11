@@ -3,7 +3,7 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 
 from sentinel.tools.executor import ToolExecutor
-from sentinel.tools.models import ToolExecutionStatus, ToolRequest
+from sentinel.tools.models import ToolExecutionStatus, ToolRequest, ToolResult
 
 
 class SentinelMCPServer:
@@ -18,7 +18,7 @@ class SentinelMCPServer:
 
         self.register_tools()
 
-    def _raise_tool_error(self, result, tool_name: str) -> None:
+    def _raise_tool_error(self, result: ToolResult, tool_name: str) -> None:
         """Raise a structured MCP error that preserves the denial/failure distinction."""
         if result.status == ToolExecutionStatus.DENIED:
             raise RuntimeError(f"[DENIED] Tool execution denied: {tool_name}")

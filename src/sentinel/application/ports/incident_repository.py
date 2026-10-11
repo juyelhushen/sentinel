@@ -20,5 +20,12 @@ class IncidentRepository(ABC):
             await result
 
     @abstractmethod
-    def get(self, incident_id: UUID) -> Incident | None:
+    def get(self, incident_id: UUID) -> Incident | None | Awaitable[Incident | None]:
         """Retrieve an incident by ID."""
+
+    async def get_by_id(self, incident_id: UUID) -> Incident | None:
+        """Retrieve through synchronous or asynchronous adapters."""
+        result = self.get(incident_id)
+        if isawaitable(result):
+            return await result
+        return result

@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from mcp.shared.exceptions import MCPError
 
 from sentinel.infrastructure.mcp.tool_gateway import MCPToolGateway
 from sentinel.tools.models import ToolExecutionStatus, ToolRequest
@@ -24,11 +25,15 @@ async def test_initialize_discovers_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_returns_failure_when_mcp_client_raises() -> None:
+@pytest.mark.parametrize(
+    "error",
+    [MCPError(-32000, "connection lost"), TimeoutError("connection lost")],
+)
+async def test_execute_returns_failure_when_mcp_client_raises(error: Exception) -> None:
 
     client = Mock()
     client.tool_names = {"read_file"}
-    client.call_tool = AsyncMock(side_effect=RuntimeError("connection lost"))
+    client.call_tool = AsyncMock(side_effect=error)
 
     gateway = MCPToolGateway(client)
 
@@ -53,8 +58,14 @@ async def test_execute_returns_failure_when_mcp_client_raises() -> None:
 @pytest.mark.asyncio
 async def test_execute_preserves_explicit_denial() -> None:
     class DeniedResult:
-        content = [type("Item", (), {"text": "[DENIED] Tool execution denied: read_file"})()]
         is_error = True
+
+        def __init__(self) -> None:
+            self.content = [
+                type(
+                    "Item", (), {"text": "[DENIED] Tool execution denied: read_file"}
+                )()
+            ]
 
     client = Mock()
     client.tool_names = {"read_file"}
@@ -71,3 +82,20 @@ async def test_execute_preserves_explicit_denial() -> None:
 
     assert result.status == ToolExecutionStatus.DENIED
     assert result.error.startswith("[DENIED]")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", [TypeError, RuntimeError])
+async def test_execute_propagates_unexpected_errors(
+    error_type: type[Exception],
+) -> None:
+    client = Mock()
+    client.tool_names = {"read_file"}
+    client.call_tool = AsyncMock(
+        side_effect=error_type("invalid client implementation")
+    )
+
+    gateway = MCPToolGateway(client)
+
+    with pytest.raises(error_type, match="invalid client implementation"):
+        await gateway.execute(ToolRequest(tool_name="read_file", arguments={}))

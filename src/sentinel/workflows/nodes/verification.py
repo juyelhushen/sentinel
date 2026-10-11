@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from sentinel.agents.verification.verification_agent import VerificationAgent
 from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.repair.retry import RepairRetryPolicy
@@ -7,8 +9,8 @@ from sentinel.workflows.graph_state import SentinelGraphState
 def verification_node(
     verification_agent: VerificationAgent,
     verification_path: str,
-):
-    async def node(state: SentinelGraphState) -> dict:
+) -> Callable[[SentinelGraphState], Awaitable[SentinelGraphState]]:
+    async def node(state: SentinelGraphState) -> SentinelGraphState:
         if state.get("error") is not None:
             return {"verification": None}
 
@@ -50,7 +52,9 @@ def verification_router(
     return "retry"
 
 
-def create_verification_router(retry_policy: RepairRetryPolicy):
+def create_verification_router(
+    retry_policy: RepairRetryPolicy,
+) -> Callable[[SentinelGraphState], str]:
     def route(state: SentinelGraphState) -> str:
         return verification_router(state, retry_policy)
 

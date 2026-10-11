@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -234,7 +235,7 @@ class SQLiteRepairRepository(RepairRepository):
 
     @staticmethod
     def _get_plan_summary(
-        connection,
+        connection: sqlite3.Connection,
         attempt_id: UUID,
         steps: tuple[RepairStep, ...],
     ) -> str:
@@ -251,4 +252,5 @@ class SQLiteRepairRepository(RepairRepository):
         if row is None:
             raise ValueError(f"Repair attempt not found: {attempt_id}")
 
-        return row["plan_summary"]
+        summary: str = row["plan_summary"]
+        return summary

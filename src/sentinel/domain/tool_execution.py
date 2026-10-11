@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from sentinel.tools.models import ToolExecutionStatus
@@ -12,7 +13,7 @@ class ToolExecution:
     tool_name: str
     status: ToolExecutionStatus
     execution_id: UUID | None = None
-    arguments: dict = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=dict)
     output: str | None = None
     error: str | None = None
     request_id: UUID = field(default_factory=uuid4)

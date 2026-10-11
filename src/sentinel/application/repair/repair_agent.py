@@ -5,7 +5,7 @@ from sentinel.domain.models.incident import Incident
 from sentinel.domain.repair import RepairPlan
 from sentinel.domain.repair.attempt import RepairAttempt
 from sentinel.llm.base import LLMProvider
-from sentinel.llm.models import LLMRequest
+from sentinel.llm.models import LLMMessage, LLMRequest
 
 
 class RepairAgent:
@@ -16,7 +16,7 @@ class RepairAgent:
         self,
         incident: Incident,
         investigation: InvestigationResult,
-        previous_attempts: tuple[RepairAttempt, ...] = ()
+        previous_attempts: tuple[RepairAttempt, ...] = (),
     ) -> RepairPlan:
         prompt = build_repair_prompt(
             incident=incident,
@@ -25,7 +25,10 @@ class RepairAgent:
         )
 
         request = LLMRequest(
-            messages=prompt.to_message(),
+            messages=(
+                LLMMessage(role="system", content=prompt.system),
+                LLMMessage(role="user", content=prompt.user),
+            ),
             temperature=0.0,
         )
 

@@ -5,7 +5,7 @@ from sentinel.workflows.graph_state import SentinelGraphState
 
 def execution_complete_node(
     state: SentinelGraphState,
-) -> dict:
+) -> SentinelGraphState:
     """Complete the current execution."""
 
     execution = state.get("execution")

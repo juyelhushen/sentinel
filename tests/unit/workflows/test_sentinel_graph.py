@@ -14,6 +14,7 @@ from sentinel.domain.models.incident import Incident
 from sentinel.domain.models.verification import VerificationResult, VerificationStatus
 from sentinel.domain.repair.models import RepairPlan
 from sentinel.domain.repair.retry import RepairRetryPolicy
+from sentinel.llm.exceptions import LLMConnectionError
 from sentinel.tools.models import ToolExecutionStatus, ToolResult
 from sentinel.workflows.sentinel_graph import create_sentinel_graph
 
@@ -68,7 +69,7 @@ class FailingPlannerAgent:
         self,
         incident: Incident,
     ) -> InvestigationPlan:
-        raise RuntimeError("LLM is unavailable")
+        raise LLMConnectionError("LLM is unavailable")
 
 
 @pytest.mark.asyncio

@@ -23,10 +23,7 @@ class ApplyPatchTool(Tool):
 
     @property
     def description(self) -> str:
-        return (
-            "Safely applies a unified diff patch to an existing "
-            "repository file."
-        )
+        return "Safely applies a unified diff patch to an existing repository file."
 
     async def execute(self, request: ToolRequest) -> ToolResult:
         file_path = request.arguments.get("file_path")

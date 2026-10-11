@@ -5,7 +5,6 @@ from sentinel.domain.repair.attempt import RepairAttempt
 
 
 class RepairRepository(ABC):
-    
     @abstractmethod
     async def save_attempt(
         self,
@@ -13,7 +12,7 @@ class RepairRepository(ABC):
         attempt: RepairAttempt,
     ) -> None:
         raise NotImplementedError
-    
+
     @abstractmethod
     async def get_attempts(
         self,

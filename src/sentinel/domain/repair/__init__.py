@@ -7,9 +7,9 @@ from sentinel.domain.repair.models import (
 from sentinel.domain.repair.retry import RepairRetryPolicy
 
 __all__ = [
-    'RepairAttempt',
+    "RepairAttempt",
     "RepairPlan",
-    'RepairRetryPolicy',
+    "RepairRetryPolicy",
     "RepairStep",
     "RepairStepType",
 ]

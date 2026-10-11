@@ -4,8 +4,8 @@ from uuid import UUID, uuid4
 
 
 class VerificationStatus(StrEnum):
-    PASSED="passed"
-    FAILED="failed"
+    PASSED = "passed"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True)

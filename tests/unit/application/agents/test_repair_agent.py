@@ -7,10 +7,16 @@ from sentinel.agents.investigator.models import (
 from sentinel.agents.planner.models import PlanStepType
 from sentinel.application.repair.repair_agent import RepairAgent
 from sentinel.domain.models.incident import Incident
+from sentinel.llm.models import LLMMessage, LLMRequest
 
 
 class FakeLLMProvider:
     async def generate(self, request):
+        assert isinstance(request, LLMRequest)
+        assert isinstance(request.messages, tuple)
+        assert all(isinstance(message, LLMMessage) for message in request.messages)
+        assert [message.role for message in request.messages] == ["system", "user"]
+
         class Response:
             content = """
             {

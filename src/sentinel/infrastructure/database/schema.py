@@ -1,3 +1,5 @@
+import sqlite3
+
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 
 
@@ -104,7 +106,7 @@ class SchemaInitializer:
 
             self._migrate_repair_schema(connection)
 
-    def _migrate_repair_schema(self, connection) -> None:
+    def _migrate_repair_schema(self, connection: sqlite3.Connection) -> None:
         columns = {
             column[1]: column
             for column in connection.execute(

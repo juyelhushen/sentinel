@@ -14,8 +14,7 @@ async def test_apply_patch_modifies_repository_file(
 ) -> None:
     target = tmp_path / "example.py"
     target.write_text(
-        "def greet():\n"
-        "    return 'hello'\n",
+        "def greet():\n    return 'hello'\n",
         encoding="utf-8",
     )
 
@@ -43,8 +42,7 @@ async def test_apply_patch_modifies_repository_file(
 
     assert result.succeeded
     assert target.read_text(encoding="utf-8") == (
-        "def greet():\n"
-        "    return 'hello world'\n"
+        "def greet():\n    return 'hello world'\n"
     )
 
 

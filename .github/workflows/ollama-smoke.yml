@@ -1,0 +1,71 @@
+
+name: Sentinel Ollama Smoke Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ollama-smoke:
+    name: Verify Cloud Ollama
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check required configuration
+        env:
+          OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+          OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
+        run: |
+          test -n "$OLLAMA_BASE_URL" || {
+            echo "::error::Configure OLLAMA_BASE_URL in GitHub Secrets"
+            exit 1
+          }
+          test -n "$OLLAMA_MODEL" || {
+            echo "::error::Configure OLLAMA_MODEL in GitHub Variables"
+            exit 1
+          }
+
+      - name: Test model inference
+        env:
+          OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_url="${OLLAMA_BASE_URL%/}"
+          auth_args=()
+
+          if [[ -n "${OLLAMA_API_KEY:-}" ]]; then
+            auth_args=(-H "Authorization: Bearer ${OLLAMA_API_KEY}")
+          fi
+
+          payload="$(jq -n \
+            --arg model "$OLLAMA_MODEL" \
+            '{
+              model: $model,
+              messages: [{
+                role: "user",
+                content: "Reply with exactly SENTINEL_OLLAMA_OK"
+              }],
+              stream: false
+            }')"
+
+          response="$(curl \
+            --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 300 \
+            -X POST "${base_url}/api/chat" \
+            -H "Content-Type: application/json" \
+            "${auth_args[@]}" \
+            -d "$payload")"
+
+          content="$(echo "$response" | jq -er \
+            '.message.content | select(type == "string" and length > 0)')"
+
+          test -n "$content"
+          echo "Cloud Ollama inference succeeded for model: ${OLLAMA_MODEL}"

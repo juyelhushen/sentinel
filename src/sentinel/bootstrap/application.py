@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Any
+
+from langgraph.graph.state import CompiledStateGraph
 
 from sentinel.agents.investigator.agent import InvestigatorAgent
 from sentinel.agents.planner.agent import PlannerAgent
@@ -13,22 +14,13 @@ from sentinel.application.services.repair_execution_service import (
     RepairExecutionService,
 )
 from sentinel.application.tools.local_gateway import LocalToolGateway
+from sentinel.bootstrap.persistence import Persistence, create_persistence
 from sentinel.bootstrap.tools import create_tool_executor
 from sentinel.domain.repair.retry import RepairRetryPolicy
+from sentinel.infrastructure.database.postgres import PostgreSQLDatabase
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
-from sentinel.infrastructure.persistence.sqllite.execution_repository import (
-    SQLiteExecutionRepository,
-)
-from sentinel.infrastructure.persistence.sqllite.incident_repository import (
-    SQLiteIncidentRepository,
-)
-from sentinel.infrastructure.persistence.sqllite.repair_repository import (
-    SQLiteRepairRepository,
-)
-from sentinel.infrastructure.persistence.sqllite.tool_execution_repository import (
-    SQLiteToolExecutionRepository,
-)
 from sentinel.llm.base import LLMProvider
+from sentinel.workflows.graph_state import SentinelGraphState
 from sentinel.workflows.sentinel_graph import create_sentinel_graph
 
 
@@ -40,17 +32,23 @@ def create_sentinel_application(
     verification_path: str = "tests",
     retry_policy: RepairRetryPolicy | None = None,
     approval_gate: RepairApprovalGate | None = None,
-    database: SQLiteDatabase | None = None,
+    database: SQLiteDatabase | PostgreSQLDatabase | None = None,
+    persistence: Persistence | None = None,
     repair_repository: RepairRepository | None = None,
     incident_repository: IncidentRepository | None = None,
     execution_repository: ExecutionRepository | None = None,
-) -> Any:
+) -> CompiledStateGraph[
+    SentinelGraphState, None, SentinelGraphState, SentinelGraphState
+]:
     """Create the complete Sentinel application."""
+
+    if persistence is None and database is not None:
+        persistence = create_persistence(database)
 
     tool_executor = create_tool_executor(
         repository_root=repository_root,
         audit_repository=(
-            SQLiteToolExecutionRepository(database) if database is not None else None
+            persistence.tool_executions if persistence is not None else None
         ),
     )
 
@@ -68,13 +66,13 @@ def create_sentinel_application(
 
     if enable_repair:
         repair_repository = repair_repository or (
-            SQLiteRepairRepository(database) if database is not None else None
+            persistence.repairs if persistence is not None else None
         )
         incident_repository = incident_repository or (
-            SQLiteIncidentRepository(database) if database is not None else None
+            persistence.incidents if persistence is not None else None
         )
         execution_repository = execution_repository or (
-            SQLiteExecutionRepository(database) if database is not None else None
+            persistence.executions if persistence is not None else None
         )
 
         return create_sentinel_graph(

@@ -1,3 +1,8 @@
+import sqlite3
+from unittest.mock import Mock
+
+import pytest
+
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 
 
@@ -60,3 +65,20 @@ def test_transaction_rolls_back_on_failure(tmp_path):
         result = connection.execute("SELECT value FROM test_data").fetchone()
 
     assert result is None
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_transaction_always_closes_owned_connection(tmp_path, fail):
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    connection = database.connect()
+    database.connect = Mock(return_value=connection)
+
+    if fail:
+        with pytest.raises(RuntimeError, match="rollback"), database.transaction():
+            raise RuntimeError("rollback")
+    else:
+        with database.transaction() as acquired:
+            assert acquired is connection
+
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        connection.execute("SELECT 1")

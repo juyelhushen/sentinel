@@ -4,36 +4,33 @@ from sentinel.application.use_cases.create_incident import (
     CreateIncidentCommand,
     CreateIncidentUseCase,
 )
-from sentinel.infrastructure.dependencies.database import (
-    create_database_connection,
-)
-from sentinel.infrastructure.dependencies.repositories import (
-    create_incident_repository,
-)
+from sentinel.bootstrap.persistence import open_persistence
+from sentinel.config.settings import get_settings
 
 
 def main() -> None:
     """Run Sentinel."""
 
-    connection = create_database_connection()
-
-    repository = create_incident_repository(connection)
-
-    create_incident = CreateIncidentUseCase(repository)
-
-    incident = asyncio.run(
-        create_incident.execute(
-            CreateIncidentCommand(
-                title="Example incident",
-                description="Example Sentinel incident",
-                repository="/workspace/example",
+    async def run() -> None:
+        settings = get_settings()
+        async with open_persistence(
+            settings.database_url,
+            schema=settings.database_schema,
+            timeout_seconds=settings.database_connect_timeout_seconds,
+            pool_size=settings.database_pool_size,
+        ) as persistence:
+            create_incident = CreateIncidentUseCase(persistence.incidents)
+            incident = await create_incident.execute(
+                CreateIncidentCommand(
+                    title="Example incident",
+                    description="Example Sentinel incident",
+                    repository="/workspace/example",
+                )
             )
-        )
-    )
+            print(f"Created incident: {incident.id}")
 
-    print(f"Created incident: {incident.id}")
-
-    connection.close()
+    with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
+        runner.run(run())
 
 
 if __name__ == "__main__":

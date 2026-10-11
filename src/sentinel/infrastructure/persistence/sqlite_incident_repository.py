@@ -84,6 +84,10 @@ class SQLiteIncidentRepository(IncidentRepository):
         if row is None:
             return None
 
+        return self._to_domain(row)
+
+    @staticmethod
+    def _to_domain(row: sqlite3.Row) -> Incident:
         return Incident(
             id=UUID(row["id"]),
             title=row["title"],

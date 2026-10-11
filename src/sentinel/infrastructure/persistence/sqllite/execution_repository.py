@@ -27,10 +27,8 @@ class SQLiteExecutionRepository(ExecutionRepository):
             self._save(execution, connection)
             return
 
-        with self._database.connect() as db_connection:
+        with self._database.transaction() as db_connection:
             self._save(execution, db_connection)
-
-            db_connection.commit()
 
     def _save(
         self,
@@ -71,7 +69,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
     ) -> Execution | None:
         """Retrieve an execution by ID."""
 
-        with self._database.connect() as connection:
+        with self._database.transaction() as connection:
             connection.row_factory = sqlite3.Row
 
             row = connection.execute(
@@ -99,7 +97,7 @@ class SQLiteExecutionRepository(ExecutionRepository):
     ) -> list[Execution]:
         """Retrieve all executions for an incident."""
 
-        with self._database.connect() as connection:
+        with self._database.transaction() as connection:
             connection.row_factory = sqlite3.Row
 
             rows = connection.execute(

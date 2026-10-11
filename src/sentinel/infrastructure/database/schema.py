@@ -10,7 +10,7 @@ class SchemaInitializer:
         self._database = database
 
     def initialize(self) -> None:
-        with self._database.connect() as connection:
+        with self._database.transaction() as connection:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS incidents (

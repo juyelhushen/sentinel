@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 from uuid import UUID
 
 from sentinel.application.ports.incident_repository import (
@@ -24,10 +25,8 @@ class SQLiteIncidentRepository(IncidentRepository):
             self._save(incident, connection)
             return
 
-        with self._database.connect() as db_connection:
+        with self._database.transaction() as db_connection:
             self._save(incident, db_connection)
-
-            # connection.commit()
 
     def _save(
         self,
@@ -70,7 +69,7 @@ class SQLiteIncidentRepository(IncidentRepository):
     ) -> Incident | None:
         """Retrieve an incident."""
 
-        with self._database.connect() as connection:
+        with self._database.transaction() as connection:
             connection.row_factory = sqlite3.Row
 
             row = connection.execute(
@@ -92,14 +91,18 @@ class SQLiteIncidentRepository(IncidentRepository):
         if row is None:
             return None
 
+        return self._to_domain(row)
+
+    @staticmethod
+    def _to_domain(row: sqlite3.Row) -> Incident:
         return Incident(
             id=UUID(row["id"]),
             title=row["title"],
             description=row["description"],
             repository=row["repository"],
             status=IncidentStatus(row["status"]),
-            created_at=__import__("datetime").datetime.fromisoformat(row["created_at"]),
-            updated_at=__import__("datetime").datetime.fromisoformat(row["updated_at"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
         )
 
     async def get_by_id(

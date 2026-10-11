@@ -1,7 +1,7 @@
 from sentinel.workflows.graph_state import SentinelGraphState
 
 
-def error_node(state: SentinelGraphState) -> dict:
+def error_node(state: SentinelGraphState) -> SentinelGraphState:
     """Handle a workflow error"""
 
     return {

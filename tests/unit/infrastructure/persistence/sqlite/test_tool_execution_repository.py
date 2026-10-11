@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+import pytest
+
 from sentinel.domain.tool_execution import ToolExecution
 from sentinel.infrastructure.database.schema import SchemaInitializer
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
@@ -172,3 +174,38 @@ async def test_tool_executions_survive_repository_recreation(
         "query": "ToolExecutor",
     }
     assert records[0].output == ("src/sentinel/tools/executor.py:10")
+
+
+@pytest.mark.parametrize("commit", [True, False])
+async def test_save_reuses_injected_transaction_without_committing(tmp_path, commit):
+    database = SQLiteDatabase(tmp_path / "sentinel.db")
+    SchemaInitializer(database).initialize()
+    repository = SQLiteToolExecutionRepository(database)
+    execution_id = uuid4()
+    tool_execution = ToolExecution(
+        tool_name="read_file",
+        status=ToolExecutionStatus.SUCCESS,
+        execution_id=execution_id,
+        arguments={"path": "example.txt"},
+    )
+
+    connection = database.connect()
+    try:
+        await repository.save(tool_execution, connection=connection)
+
+        assert connection.in_transaction
+        assert connection.execute(
+            "SELECT request_id FROM tool_executions"
+        ).fetchone() == (str(tool_execution.request_id),)
+        assert await repository.get_by_execution_id(execution_id) == []
+
+        if commit:
+            connection.commit()
+        else:
+            connection.rollback()
+    finally:
+        connection.close()
+
+    assert await repository.get_by_execution_id(execution_id) == (
+        [tool_execution] if commit else []
+    )

@@ -1,13 +1,15 @@
+from collections.abc import Awaitable, Callable
+
 from sentinel.agents.investigator.agent import InvestigatorAgent
 from sentinel.workflows.graph_state import SentinelGraphState
 
 
 def create_investigator_node(
     investigator_agent: InvestigatorAgent,
-):
+) -> Callable[[SentinelGraphState], Awaitable[SentinelGraphState]]:
     """Create a LangGraph node that executes an investigation plan."""
 
-    async def investigator_node(state: SentinelGraphState) -> dict:
+    async def investigator_node(state: SentinelGraphState) -> SentinelGraphState:
         """Execute the investigation plan."""
 
         try:

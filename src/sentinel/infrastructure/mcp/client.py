@@ -1,7 +1,9 @@
 from contextlib import AsyncExitStack
+from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import CallToolResult
 
 from sentinel.infrastructure.mcp.models import MCPTool
 
@@ -45,7 +47,7 @@ class SentinelMCPClient:
     #
     #     return result.tools
 
-    async def call_tool(self, name: str, args: dict):
+    async def call_tool(self, name: str, args: dict[str, Any]) -> CallToolResult:
         if self._session is None:
             raise RuntimeError("MCP client is not connected.")
 

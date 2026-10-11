@@ -1,4 +1,4 @@
-# Ruff Lint Fix Validation
+# Ruff and Type-Check Validation
 
 ## Results
 
@@ -6,10 +6,13 @@
 - `uv run ruff format src tests`: executed; formatting applied without unsafe fixes.
 - `uv run ruff format --check src tests`: PASS, 233 files already formatted.
 - `uv run ruff check src tests`: PASS, all checks passed.
-- `uv run mypy src`: FAIL, 35 pre-existing errors in 18 files, checking 124 source files. A non-incremental run confirmed the same errors.
-- `uv run pytest -q`: PASS, 218 passed, 1 skipped. No skip markers or assertions were weakened by this change.
+- `uv run mypy src`: PASS, no issues found in 124 source files.
+- `uv run pytest -q`: PASS, 222 passed, 1 skipped. No skip markers or assertions were weakened by these changes.
+- `uv run pytest -q -m 'not integration'`: PASS, 214 passed, 1 skipped, 8 deselected; this is the existing CI test selection.
 
-The committed versions of the modified source files were type-checked in memory with the remaining sources unchanged. They reproduced all 35 MyPy errors. No source files were reverted for this comparison. CI is not fully green because MyPy still fails.
+The initial lint work reproduced 35 pre-existing MyPy errors by checking committed source in memory, without reverting local edits. The type-check follow-up below resolves all 35 errors. All local CI commands now pass; a new GitHub Actions run is still needed after pushing.
+
+The first full test run during the type-check follow-up had one live Ollama integration failure: `sentinel.llm.exceptions.LLMConnectionError: Ollama request timed out.` The isolated retry passed with unchanged settings, followed by a passing full suite. No provider timeout or test assertion was changed.
 
 ## Files and Reasons
 
@@ -31,6 +34,32 @@ The first four entries already had local edits when this task began. Those edits
 - [tests/unit/workflows/test_sentinel_graph.py](../tests/unit/workflows/test_sentinel_graph.py): use `LLMConnectionError` for the simulated provider outage, preserving error-state assertions.
 - [docs/ruff-lint-validation.md](ruff-lint-validation.md): record changes, validation, and exact remaining diagnostics.
 
+## Type-Check Follow-Up
+
+- [src/sentinel/application/ports/incident_repository.py](../src/sentinel/application/ports/incident_repository.py): permit existing sync/async reads and normalize them through `get_by_id`, mirroring `persist`.
+- [src/sentinel/application/repair/repair_agent.py](../src/sentinel/application/repair/repair_agent.py): construct the required tuple of `LLMMessage` objects instead of raw dictionaries.
+- [src/sentinel/application/services/investigation_service.py](../src/sentinel/application/services/investigation_service.py): type the existing graph boundary as `Runnable[SentinelGraphState, SentinelGraphState]` and narrow the optional workflow execution before assignment.
+- [src/sentinel/bootstrap/investigation.py](../src/sentinel/bootstrap/investigation.py): initialize the schema, share `SQLiteDatabase`, use the async incident and execution repositories, and inject `LocalToolGateway` into the investigator. Tool audit and execution persistence remain separate repositories.
+- [src/sentinel/domain/tool_execution.py](../src/sentinel/domain/tool_execution.py): specify `dict[str, Any]` for the genuinely dynamic tool argument payload, matching `ToolRequest`.
+- [src/sentinel/infrastructure/database/schema.py](../src/sentinel/infrastructure/database/schema.py): annotate the migration connection as `sqlite3.Connection`.
+- [src/sentinel/infrastructure/mcp/client.py](../src/sentinel/infrastructure/mcp/client.py): annotate dynamic tool arguments and the SDK's default-overload `CallToolResult` return.
+- [src/sentinel/infrastructure/mcp/server.py](../src/sentinel/infrastructure/mcp/server.py): annotate the error helper's existing `ToolResult` parameter.
+- [src/sentinel/infrastructure/persistence/sqllite/repair_repository.py](../src/sentinel/infrastructure/persistence/sqllite/repair_repository.py): annotate the summary lookup connection and stored text summary.
+- [src/sentinel/infrastructure/persistence/sqllite/tool_execution_repository.py](../src/sentinel/infrastructure/persistence/sqllite/tool_execution_repository.py): replace the injected-connection ellipsis with the actual parameterized insert, reusing the caller's connection without committing, rolling back, or closing it; annotate heterogeneous SQLite rows.
+- [src/sentinel/workflows/nodes/complete_execution.py](../src/sentinel/workflows/nodes/complete_execution.py): return the existing state type.
+- [src/sentinel/workflows/nodes/error.py](../src/sentinel/workflows/nodes/error.py): return the existing state type.
+- [src/sentinel/workflows/nodes/execution.py](../src/sentinel/workflows/nodes/execution.py): return the existing state type.
+- [src/sentinel/workflows/nodes/fail_execution.py](../src/sentinel/workflows/nodes/fail_execution.py): return the existing state type.
+- [src/sentinel/workflows/nodes/investigator.py](../src/sentinel/workflows/nodes/investigator.py): annotate the async node factory and its state update.
+- [src/sentinel/workflows/nodes/planner.py](../src/sentinel/workflows/nodes/planner.py): annotate the async node factory and its state update.
+- [src/sentinel/workflows/nodes/repair.py](../src/sentinel/workflows/nodes/repair.py): annotate both async node factories and repair-attempt state updates.
+- [src/sentinel/workflows/nodes/verification.py](../src/sentinel/workflows/nodes/verification.py): annotate the async node factory, state update, and router factory.
+- [src/sentinel/workflows/sentinel_graph.py](../src/sentinel/workflows/sentinel_graph.py): type the compiled graph and wrappers, guard optional executions, and register factory callables through public `RunnableLambda` adapters with the existing state schema. No new casts or suppressions were added.
+- [tests/integration/bootstrap/test_application.py](../tests/integration/bootstrap/test_application.py): exercise the investigation service factory with real SQLite incident, execution, and tool-audit persistence.
+- [tests/unit/application/agents/test_repair_agent.py](../tests/unit/application/agents/test_repair_agent.py): assert the canonical request/message types and roles.
+- [tests/unit/application/services/test_investigation_service.py](../tests/unit/application/services/test_investigation_service.py): exercise inherited port reads through both sync and async repository doubles.
+- [tests/unit/infrastructure/persistence/sqlite/test_tool_execution_repository.py](../tests/unit/infrastructure/persistence/sqlite/test_tool_execution_repository.py): verify injected-connection reuse and caller-owned commit/rollback.
+
 ## Exception Contracts
 
 - MCP 2.2.0: `mcp.shared.exceptions.MCPError` represents peer protocol errors, read timeouts, and closed connections. The installed JSON-RPC dispatcher translates broken/closed streams to this type but can propagate raw `TimeoutError` on writes. `pydantic.ValidationError` represents responses that violate the negotiated protocol schema. Lifecycle `RuntimeError` and programming `TypeError` are not swallowed. Explicit denial remains a `DENIED` result.
@@ -38,9 +67,9 @@ The first four entries already had local edits when this task began. Those edits
 - Planner: `PlanParsingError` is the existing parser contract, and `LLMError` includes the existing connection, timeout, and response failures. These retain the `{plan: None, error: str(exc)}` route.
 - Investigator: `ValueError` covers the existing missing-plan guard and mapper's unsupported-action validation. Normal tool failures remain `ToolResult` values. Unexpected runtime/type errors propagate; the investigation error state is unchanged.
 
-## Unresolved MyPy Diagnostics
+## Original MyPy Baseline (Resolved)
 
-The SQLite injected-connection branch still contains the pre-existing `connection.execute(...)` placeholder. The lint rename does not repair or change that branch. Repository/transaction tests passed, but they do not exercise that placeholder. Correcting it and the other API/type issues below requires separate work; the full CI build remains blocked.
+All diagnostics below are historical and now resolved. The injected-connection placeholder has been replaced with the real insert and has commit/rollback regression coverage. The final type-check reports no issues.
 
 ```text
 src\sentinel\domain\tool_execution.py:15: error: Missing type arguments for generic type "dict"  [type-arg]
@@ -86,4 +115,4 @@ Found 35 errors in 18 files (checked 124 source files)
 
 ## Recommended Commit Message
 
-`fix: resolve Ruff violations and narrow expected failure handling`
+`fix: resolve CI type errors and repair dependency contracts`

@@ -1,5 +1,7 @@
 from uuid import UUID
 
+from langchain_core.runnables import Runnable
+
 from sentinel.application.ports.execution_repository import ExecutionRepository
 from sentinel.application.ports.incident_repository import IncidentRepository
 from sentinel.domain.enums.incident_status import IncidentStatus
@@ -15,7 +17,7 @@ class InvestigationService:
         self,
         incident_repository: IncidentRepository,
         execution_repository: ExecutionRepository,
-        graph,
+        graph: Runnable[SentinelGraphState, SentinelGraphState],
     ) -> None:
         self._incident_repository = incident_repository
         self._execution_repository = execution_repository
@@ -55,10 +57,12 @@ class InvestigationService:
 
             raise
 
-        execution = result.get("execution")
+        workflow_execution = result.get("execution")
 
-        if execution is None:
+        if workflow_execution is None:
             raise RuntimeError("Workflow completed without an execution.")
+
+        execution = workflow_execution
 
         if result.get("error") is not None:
             incident.fail()

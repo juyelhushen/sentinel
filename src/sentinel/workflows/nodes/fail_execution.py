@@ -5,7 +5,7 @@ from sentinel.workflows.graph_state import SentinelGraphState
 
 def execution_fail_node(
     state: SentinelGraphState,
-) -> dict:
+) -> SentinelGraphState:
     """Mark the current execution as failed."""
 
     execution = state.get("execution")

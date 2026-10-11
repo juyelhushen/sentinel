@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from sentinel.application.ports.repair_repository import RepairRepository
 from sentinel.application.repair.repair_agent import RepairAgent
 from sentinel.application.services.repair_execution_service import (
@@ -9,8 +11,8 @@ from sentinel.workflows.graph_state import SentinelGraphState
 
 def repair_plan_node(
     repair_agent: RepairAgent,
-):
-    async def node(state: SentinelGraphState) -> dict:
+) -> Callable[[SentinelGraphState], Awaitable[SentinelGraphState]]:
+    async def node(state: SentinelGraphState) -> SentinelGraphState:
         incident = state.get("incident")
         if incident is None:
             raise ValueError("Cannot create repair plan without an incident.")
@@ -40,8 +42,8 @@ def repair_plan_node(
 
 def repair_node(
     repair_execution_service: RepairExecutionService,
-):
-    async def node(state: SentinelGraphState) -> dict:
+) -> Callable[[SentinelGraphState], Awaitable[SentinelGraphState]]:
+    async def node(state: SentinelGraphState) -> SentinelGraphState:
         repair_plan = state.get("repair_plan")
 
         if repair_plan is None:
@@ -79,7 +81,7 @@ def repair_node(
 async def record_repair_attempt_node(
     state: SentinelGraphState,
     repair_repository: RepairRepository | None = None,
-) -> dict:
+) -> SentinelGraphState:
     repair_plan = state.get("repair_plan")
 
     if repair_plan is None:

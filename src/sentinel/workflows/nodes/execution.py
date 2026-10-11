@@ -6,7 +6,7 @@ from sentinel.workflows.graph_state import SentinelGraphState
 
 def execution_start_node(
     state: SentinelGraphState,
-) -> dict:
+) -> SentinelGraphState:
     """Create or start the execution for the workflow."""
 
     incident = state["incident"]

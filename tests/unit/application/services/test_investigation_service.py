@@ -1,12 +1,13 @@
 import pytest
 
+from sentinel.application.ports.incident_repository import IncidentRepository
 from sentinel.application.services.investigation_service import InvestigationService
 from sentinel.domain.enums.execution_status import ExecutionStatus
 from sentinel.domain.enums.incident_status import IncidentStatus
 from sentinel.domain.models.incident import Incident
 
 
-class FakeIncidentRepository:
+class FakeIncidentRepository(IncidentRepository):
     def __init__(self, incident):
         self.incident = incident
         self.saved = []
@@ -17,11 +18,16 @@ class FakeIncidentRepository:
     async def persist(self, incident):
         self.saved.append(incident)
 
-    async def get_by_id(self, incident_id):
+    async def get(self, incident_id):
         if self.incident.id == incident_id:
             return self.incident
 
         return None
+
+
+class SyncIncidentRepository(FakeIncidentRepository):
+    def get(self, incident_id):
+        return self.incident if self.incident.id == incident_id else None
 
 
 class FakeExecutionRepository:
@@ -69,14 +75,17 @@ class CompletedRepairGraph(FakeGraph):
         return result
 
 
-async def test_successful_investigation():
+@pytest.mark.parametrize(
+    "repository_type", [FakeIncidentRepository, SyncIncidentRepository]
+)
+async def test_successful_investigation(repository_type):
     incident = Incident(
         title="Broken test",
         description="A test is failing.",
         repository="sentinel",
     )
 
-    incident_repository = FakeIncidentRepository(incident)
+    incident_repository = repository_type(incident)
     execution_repository = FakeExecutionRepository()
 
     service = InvestigationService(

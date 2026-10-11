@@ -20,11 +20,8 @@ class SQLiteDatabase:
         connection = self.connect()
 
         try:
-            yield connection
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
+            with connection:
+                yield connection
         finally:
             connection.close()
 

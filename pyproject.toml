@@ -9,6 +9,8 @@ dependencies = [
     "langgraph>=1.2.11",
     "mcp>=2.2.0",
     "ollama>=0.6.2",
+    "psycopg-pool>=3.3,<4",
+    "psycopg[binary]>=3.3,<4",
     "pydantic-settings>=2.15.0",
     "uvicorn[standard]>=0.53.0",
 ]

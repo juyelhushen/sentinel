@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    database_url: str = "sqlite:///./data/sentinel.db"
+    database_url: str = Field(default="sqlite:///./data/sentinel.db", repr=False)
+    database_schema: str = "sentinel"
+    database_connect_timeout_seconds: int = Field(default=10, ge=1, le=300)
+    database_pool_size: int = Field(default=5, ge=1, le=50)
 
     llm_provider: str = "ollama"
     llm_model: str = Field(

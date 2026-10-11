@@ -10,7 +10,9 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
+from psycopg import Error as PostgreSQLError
 from pydantic import BaseModel, Field
 
 from sentinel.application.use_cases.create_incident import (
@@ -18,13 +20,12 @@ from sentinel.application.use_cases.create_incident import (
     CreateIncidentUseCase,
 )
 from sentinel.bootstrap.investigation import create_investigation_service
+from sentinel.bootstrap.persistence import open_persistence
+from sentinel.bootstrap.persistence import resolve_database_path as resolve_sqlite_path
 from sentinel.config.settings import get_settings
 from sentinel.domain.models.incident import Incident
-from sentinel.infrastructure.database.sqlite import SQLiteDatabase
+from sentinel.infrastructure.database.postgres import DatabaseUnavailable
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
-from sentinel.infrastructure.persistence.sqllite.incident_repository import (
-    SQLiteIncidentRepository,
-)
 
 
 class CreateIncidentRequest(BaseModel):
@@ -143,15 +144,7 @@ async def require_api_key(
 
 def resolve_database_path(database_url: str) -> Path:
     """Resolve the configured SQLite URL to a filesystem path."""
-    prefix = "sqlite:///"
-
-    if not database_url.startswith(prefix):
-        raise RuntimeError("Only SQLite database URLs are supported.")
-
-    raw_path = database_url.removeprefix(prefix)
-    path = Path(raw_path).expanduser().resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
+    return resolve_sqlite_path(database_url)
 
 
 @asynccontextmanager
@@ -161,27 +154,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     repository_root = settings.repository_root.resolve()
     repository_root.mkdir(parents=True, exist_ok=True)
 
-    database_path = resolve_database_path(settings.database_url)
     llm_provider = create_llm_provider()
 
-    investigation_service = create_investigation_service(
-        llm_provider=llm_provider,
-        repository_root=repository_root,
-        database_path=database_path,
-    )
-
-    database = SQLiteDatabase(database_path)
-    incident_repository = SQLiteIncidentRepository(database)
-
-    app.state.settings = settings
-    app.state.llm_provider = llm_provider
-    app.state.incident_repository = incident_repository
-    app.state.create_incident = CreateIncidentUseCase(incident_repository)
-    app.state.investigation_service = investigation_service
-
-    app.state.rate_limiter = InMemoryRateLimiter()
-
-    yield
+    async with open_persistence(
+        settings.database_url,
+        schema=settings.database_schema,
+        timeout_seconds=settings.database_connect_timeout_seconds,
+        pool_size=settings.database_pool_size,
+    ) as persistence:
+        investigation_service = create_investigation_service(
+            llm_provider=llm_provider,
+            repository_root=repository_root,
+            persistence=persistence,
+        )
+        app.state.settings = settings
+        app.state.llm_provider = llm_provider
+        app.state.incident_repository = persistence.incidents
+        app.state.create_incident = CreateIncidentUseCase(persistence.incidents)
+        app.state.investigation_service = investigation_service
+        app.state.rate_limiter = InMemoryRateLimiter()
+        yield
 
 
 app = FastAPI(
@@ -190,6 +182,15 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(DatabaseUnavailable)
+@app.exception_handler(PostgreSQLError)
+async def database_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Database unavailable. Try again later."},
+    )
 
 
 @app.get("/health")

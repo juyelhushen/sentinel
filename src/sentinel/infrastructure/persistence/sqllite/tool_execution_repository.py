@@ -57,13 +57,13 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
             connection.execute(statement, parameters)
             return
 
-        with self._database.connect() as owned_connection:
+        with self._database.transaction() as owned_connection:
             owned_connection.execute(statement, parameters)
 
     async def get_by_execution_id(self, execution_id: UUID) -> list[ToolExecution]:
         """Return all tool executions belonging to an execution."""
 
-        with self._database.connect() as connection:
+        with self._database.transaction() as connection:
             cursor = connection.execute(
                 """
                 SELECT 

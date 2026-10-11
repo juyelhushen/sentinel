@@ -132,8 +132,8 @@ class SQLiteRepairRepository(RepairRepository):
         execution_id: UUID,
     ) -> list[RepairAttempt]:
         """Retrieve an execution's repair history in attempt order."""
-        with self._database.connect() as connection:
-            connection.row_factory = __import__("sqlite3").Row
+        with self._database.transaction() as connection:
+            connection.row_factory = sqlite3.Row
 
             attempt_rows = connection.execute(
                 """

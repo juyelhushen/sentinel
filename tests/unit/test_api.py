@@ -1,4 +1,6 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import httpx
@@ -99,3 +101,39 @@ async def test_api_database_errors_do_not_expose_connection_details(
         assert result.json() == {"detail": "Database unavailable. Try again later."}
         assert "secret" not in result.text
         assert "private-host" not in result.text
+
+
+async def test_api_lifespan_builds_postgres_dsn_from_render_settings(
+    monkeypatch, tmp_path: Path
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        database_backend="postgresql",
+        db_host="ep-example-pooler.region.aws.neon.tech",
+        db_port=5432,
+        db_name="verified_test_name",
+        db_username="neondb_owner",
+        db_password="api-test-password",
+        db_sslmode="require",
+        repository_root=tmp_path,
+    )
+    repository = Mock()
+    received: dict[str, object] = {}
+
+    @asynccontextmanager
+    async def fake_open_persistence(database_url: str, **options):
+        received["database_url"] = database_url
+        received.update(options)
+        yield SimpleNamespace(incidents=repository)
+
+    monkeypatch.setattr(api, "get_settings", lambda: settings)
+    monkeypatch.setattr(api, "create_llm_provider", Mock())
+    monkeypatch.setattr(api, "open_persistence", fake_open_persistence)
+    monkeypatch.setattr(api, "create_investigation_service", Mock(return_value=Mock()))
+
+    async with api.lifespan(api.app):
+        assert api.app.state.incident_repository is repository
+
+    assert received["database_url"] == settings.database_connection_url
+    assert "api-test-password" not in repr(settings)
+    assert received["timeout_seconds"] == settings.database_connect_timeout_seconds

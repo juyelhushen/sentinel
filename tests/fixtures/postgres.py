@@ -14,12 +14,13 @@ from sentinel.config.settings import get_settings
 
 
 def validate_test_target(test_url: str) -> None:
-    application_url = get_settings().database_url
+    application_settings = get_settings()
+    application_url = application_settings.database_connection_url
     try:
         test_parameters = conninfo_to_dict(test_url)
         application_parameters = (
             conninfo_to_dict(application_url)
-            if application_url.startswith(("postgres://", "postgresql://"))
+            if application_settings.database_backend == "postgresql"
             else None
         )
     except ProgrammingError:
@@ -33,8 +34,8 @@ def validate_test_target(test_url: str) -> None:
     if application_parameters is None:
         return
 
-    test_host = test_parameters["host"].lower().rstrip(".")
-    application_host = application_parameters.get("host", "").lower().rstrip(".")
+    test_host = str(test_parameters["host"]).lower().rstrip(".")
+    application_host = str(application_parameters.get("host") or "").lower().rstrip(".")
     loopback_hosts = {"localhost", "127.0.0.1", "::1"}
     same_host = test_host == application_host or (
         test_host in loopback_hosts and application_host in loopback_hosts
@@ -49,7 +50,12 @@ def validate_test_target(test_url: str) -> None:
 @contextmanager
 def isolated_local_database() -> Iterator[None]:
     settings = get_settings()
-    parameters = conninfo_to_dict(settings.database_url)
+    if settings.database_backend != "postgresql":
+        raise RuntimeError(
+            "Set DATABASE_BACKEND=postgresql and local DB_* settings to run this command."
+        )
+    database_url = settings.database_connection_url
+    parameters = conninfo_to_dict(database_url)
     if parameters.get("host") not in {"localhost", "127.0.0.1", "::1"}:
         raise RuntimeError(
             "Local PostgreSQL tests require a loopback database endpoint."
@@ -58,15 +64,11 @@ def isolated_local_database() -> Iterator[None]:
     previous = {
         key: os.environ.get(key) for key in ("DATABASE_URL", "TEST_POSTGRES_URL")
     }
-    with psycopg.connect(
-        settings.database_url, autocommit=True, connect_timeout=5
-    ) as admin:
+    with psycopg.connect(database_url, autocommit=True, connect_timeout=5) as admin:
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
         try:
-            os.environ["DATABASE_URL"] = settings.database_url
-            os.environ["TEST_POSTGRES_URL"] = make_conninfo(
-                settings.database_url, dbname=name
-            )
+            os.environ["DATABASE_URL"] = database_url
+            os.environ["TEST_POSTGRES_URL"] = make_conninfo(database_url, dbname=name)
             validate_test_target(os.environ["TEST_POSTGRES_URL"])
             yield
         finally:

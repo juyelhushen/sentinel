@@ -1,8 +1,8 @@
-# PostgreSQL Persistence on Supabase and Render
+# PostgreSQL Persistence on Neon and Render
 
 ## Design
 
-Sentinel supports SQLite and PostgreSQL without changing its domain models or application repository ports. `sentinel.bootstrap.persistence` selects the database from `DATABASE_URL`, constructs one bundle of incident, execution, audit, and repair repositories, and owns its lifecycle through `open_persistence`.
+Sentinel supports SQLite and PostgreSQL without changing its domain models or application repository ports. `DATABASE_BACKEND` selects the adapter. `sentinel.bootstrap.persistence` constructs one bundle of incident, execution, audit, and repair repositories and owns its lifecycle through `open_persistence`.
 
 FastAPI lifespan shares that bundle with incident creation and investigation. The investigation factory delegates tool/agent/graph construction to the canonical application factory and remains compatible with its legacy SQLite `database_path` argument. The application factory accepts either database adapter or an already initialized persistence bundle. The CLI entry point also uses the same managed, configuration-selected persistence instead of forcing the legacy SQLite helper. API startup does not enable autonomous repair. Authentication, constant-time API-key comparison, endpoint rate limits, health endpoints, and Ollama settings remain unchanged.
 
@@ -14,30 +14,35 @@ The pool is opened at startup and closed at shutdown, including failed schema in
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | `sqlite:///./data/sentinel.db` | SQLite URL or Supabase PostgreSQL secret URL. Both `postgres://` and `postgresql://` are accepted. |
+| `DATABASE_BACKEND` | `sqlite` | Select `sqlite` or `postgresql`. |
+| `DATABASE_URL` | `sqlite:///./data/sentinel.db` | SQLite URL, used only for the SQLite backend. |
+| `DB_HOST` | None | Required for PostgreSQL; host supplied by Neon. |
+| `DB_PORT` | `5432` | PostgreSQL port. |
+| `DB_NAME` | None | Required for PostgreSQL. Exact Neon database name; no default is assumed. |
+| `DB_USERNAME` | None | Required for PostgreSQL; role supplied by Neon. |
+| `DB_PASSWORD` | None | Required for PostgreSQL; stored as a `SecretStr`. |
+| `DB_SSLMODE` | `require` | TLS mode: `require`, `verify-ca`, or `verify-full`. |
 | `DATABASE_SCHEMA` | `sentinel` | Private PostgreSQL schema for Sentinel tables. Simple SQL identifier, at most 63 characters. |
 | `DATABASE_CONNECT_TIMEOUT_SECONDS` | `10` | Connection/pool-acquisition timeout; 1-300 seconds. A URL's explicit `connect_timeout` is preserved for the driver connection. |
-| `DATABASE_POOL_SIZE` | `5` | Maximum pooled connections per process; 1-50. Multiply by workers/instances when sizing Supabase capacity. |
+| `DATABASE_POOL_SIZE` | `5` | Maximum pooled connections per process; 1-50. Multiply by workers/instances when sizing Neon capacity. |
 | `SENTINEL_API_KEY` | None | Existing required authentication for protected endpoints. Keep it secret. |
 | `SENTINEL_REPOSITORY_ROOT` | `./workspace` | Existing investigation workspace. |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Existing defaults | Existing provider configuration. |
 | `LLM_TIMEOUT_SECONDS` | `60` | Existing LLM timeout, unchanged by this migration. |
 
-For local SQLite development, no database environment changes are necessary. Render must have `DATABASE_URL` set to the secret PostgreSQL URL. Set optional pool/schema/timeout variables in Render's environment settings. Keep existing API-key, Ollama, workspace, and start-command settings.
+For local SQLite development, `DATABASE_BACKEND=sqlite` and `DATABASE_URL` retain their defaults. PostgreSQL settings are validated only when `DATABASE_BACKEND=postgresql`; a missing-field error lists variable names only. Configure Neon fields separately in Render, along with optional pool/schema/timeout variables. Keep existing API-key, Ollama, workspace, and start-command settings.
 
-Do not put the real URL or password in source, test files, documentation, GitHub, shell command history, or chat. Use Render's secret environment settings and a local untracked secret environment file or your secret manager. The Settings representation excludes `DATABASE_URL`; application error responses never include driver messages or connection strings.
+Do not put the password in source, test files, documentation, GitHub, shell command history, or chat. Use Render's secret environment setting for `DB_PASSWORD` and a local untracked secret environment file or secret manager. Settings repr and application error responses do not include the password or driver details. The constructed DSN is used only internally to open psycopg connections.
 
-## Supabase Connection Choice
+## Neon Connection Settings
 
-Use the URL supplied by your project's **Connect** dialog. Host, port, database, and username differ between direct and pooled connections; do not assemble or interchange them manually. Percent-encode reserved characters in a password when required by the URL format.
+Use the Neon host, username, database name, and pooler endpoint shown by your project. Sentinel constructs a psycopg DSN from separate `DB_*` variables and percent-encodes credentials internally. It never logs the constructed DSN.
 
-- **Recommended for a persistent Render backend on IPv4:** shared **session pooler**. Supabase documents this as the direct-connection alternative for IPv4-only networks.
-- **Direct endpoint:** suitable when Render can reach the project's IPv6 endpoint, or the project has the applicable IPv4 add-on. If IPv6 is unreachable, use the supplied session-pooler URL; do not disable TLS or weaken network controls.
-- **Transaction pooler:** supported by this implementation because automatic prepared statements are disabled (`prepare_threshold=None`), schema selection is transaction-local, advisory locks are transaction-scoped, and queries are not pipelined. No session state is assumed between operations. Prefer session mode for this persistent backend unless connection-budget requirements call for transaction mode.
+Use the provided pooled host `ep-lively-unit-a1pvq2yh-pooler.ap-southeast-1.aws.neon.tech` and port `5432`; verify username `neondb_owner` in Neon connection details. The request gives conflicting database names: `sentinel_db` and the Spring configuration's `neondb`. This repository cannot verify whether they refer to the same database. `DB_NAME` is required with no assumed default; copy the exact name from the Neon dashboard.
 
-For remote connections, the minimum TLS mode is `require`; `disable`, `allow`, and `prefer` are rejected. Stronger supplied settings such as `sslmode=verify-full` and `sslrootcert` are preserved. `require` encrypts but does not necessarily verify the server identity. For stronger protection, obtain the appropriate Supabase CA certificate, mount it securely on Render, and use the supplied endpoint with `sslmode=verify-full` and the correct `sslrootcert` path. Enable Supabase's server-side SSL enforcement where available. Only explicitly local loopback URLs may opt out with `sslmode=disable` for isolated local tests.
+For remote connections, `DB_SSLMODE=require` is the minimum. Stronger `verify-ca` and `verify-full` modes are supported when the corresponding CA is configured. `disable`, `allow`, and `prefer` are rejected for remote hosts. Only explicitly local loopback connections may use `disable` for development.
 
-Reference: [Supabase connection options and TLS](https://supabase.com/docs/guides/database/connecting-to-postgres).
+The Neon database name cannot be discovered safely from this repository. Confirm it in the Neon dashboard and configure `DB_NAME` accordingly before deployment.
 
 ## Schema Initialization and Permissions
 
@@ -54,17 +59,17 @@ Tables cover all existing persistence contracts:
 
 All SQLite relationship constraints and lookup indexes are preserved. The audit execution ID deliberately has no foreign key, matching SQLite: current investigator requests can have no execution ID, and existing audit records may use an unlinked UUID. This migration does not change that application-level correlation behavior.
 
-Use a dedicated backend database role, not a browser anon key or Supabase Data API key. At initial startup it needs permission to create the configured schema/tables/indexes, or ownership of a pre-provisioned empty schema. For a pre-provisioned schema, grant only the needed role access and ownership/CREATE rights. Subsequent operations need schema USAGE and table SELECT/INSERT/UPDATE/DELETE (repair updates replace child rows). This version initializes migrations during startup, so the configured role must continue to have the necessary DDL rights. Separate migration/runtime roles are not implemented here.
+Use a dedicated backend database role, not a browser/API key. At initial startup it needs permission to create the configured schema/tables/indexes, or ownership of a pre-provisioned empty schema. For a pre-provisioned schema, grant only the needed role access and ownership/CREATE rights. Subsequent operations need schema USAGE and table SELECT/INSERT/UPDATE/DELETE (repair updates replace child rows). This version initializes migrations during startup, so the configured role must continue to have the necessary DDL rights. Separate migration/runtime roles are not implemented here.
 
-Do not expose the private Sentinel schema through Supabase's public Data API and do not grant anon/authenticated roles access to it. Sentinel uses a server-side SQL role; its API-key authentication is not a substitute for database-role isolation.
+Keep the Sentinel schema private and do not grant untrusted client roles access to it. Sentinel uses a server-side SQL role; its API-key authentication is not a substitute for database-role isolation.
 
 Initialization does not drop tables, truncate data, or copy SQLite data. If pre-existing conflicting tables exist in the configured schema without the migration record, initialization fails rather than silently adopting or altering them. Choose a clean private schema or review an explicit migration. Future schema changes should be added as new numbered, atomic migrations; do not alter an already-applied migration definition.
 
 ## Safe Tests
 
-Unit tests and existing SQLite tests need no live Supabase connection. New PostgreSQL integration tests do nothing unless `TEST_POSTGRES_URL` is configured. Never use the production Supabase URL for this variable. Use a separate local test database or a dedicated non-production Supabase project/database and test role.
+Unit tests and existing SQLite tests need no live Neon connection. New PostgreSQL integration tests do nothing unless `TEST_POSTGRES_URL` is configured. Never use the production Neon URL for this variable. Use a separate local test database or a dedicated non-production Neon database and test role.
 
-Each integration test creates a randomized `sentinel_test_<uuid>` schema, initializes the schema there, and drops only that test schema during cleanup. Before connecting, the guard resolves the application `DATABASE_URL` from the same Settings object used by the application, including `.env`. Matching host/database targets are rejected even if ports differ, and loopback aliases are treated as equivalent. Test URLs must explicitly identify a host and database. These conservative checks are a guard, not proof that differently named pooler/direct endpoints belong to different projects. You are responsible for supplying a genuinely non-production test endpoint. The test role needs CREATE schema and rights to delete its own isolated schema. No production data is copied or touched.
+Each integration test creates a randomized `sentinel_test_<uuid>` schema, initializes the schema there, and drops only that test schema during cleanup. Before connecting, the guard resolves the selected application backend DSN from the same Settings object used by the application, including `.env`. Matching host/database targets are rejected even if ports differ, and loopback aliases are treated as equivalent. Test URLs must explicitly identify a host and database. These conservative checks are a guard, not proof that differently named pooled/direct endpoints belong to different projects. You are responsible for supplying a genuinely non-production test endpoint. The test role needs CREATE schema and rights to delete its own isolated schema. No production data is copied or touched.
 
 Set the test URL privately through a secret environment file/manager, not a literal command containing credentials. Then run:
 
@@ -72,7 +77,7 @@ Set the test URL privately through a secret environment file/manager, not a lite
 uv run pytest -q tests/integration/persistence/test_postgres.py
 ```
 
-For repeatable local testing using the credentials already configured privately in `.env`, run:
+For repeatable local testing, configure `DATABASE_BACKEND=postgresql` and the local `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD` privately in `.env`, then run:
 
 ```powershell
 uv run python -m tests.fixtures.postgres
@@ -108,11 +113,11 @@ The existing full suite includes live Ollama integration tests; an Ollama timeou
 
 ## Scope and Limitations
 
-All four existing repository contracts are implemented for PostgreSQL, including repair attempts, steps, and verifications. Autonomous repair is still disabled in the API. No SQLite-to-PostgreSQL data-transfer tool, Supabase Data API adapter, multi-operation unit of work for an entire investigation, or separate offline migration CLI is added. An investigation persists through the existing sequence of repository operations; individual operations and repair writes are atomic.
+All four existing repository contracts are implemented for PostgreSQL, including repair attempts, steps, and verifications. Autonomous repair is still disabled in the API. No SQLite-to-PostgreSQL data-transfer tool, multi-operation unit of work for an entire investigation, or separate offline migration CLI is added. An investigation persists through the existing sequence of repository operations; individual operations and repair writes are atomic.
 
 `/health` remains public and does not query the database. Startup requires successful database schema initialization; a failed startup prevents serving any routes until configuration/connectivity is corrected. Runtime PostgreSQL failures return a generic HTTP 503. Endpoint rate limiting remains per-process/in-memory and is not distributed across Render instances, matching existing behavior.
 
-No Supabase resources are provisioned and no deployment, commit, or push is performed by this change. Live Supabase compatibility must be verified against a dedicated test database before deploying production.
+No Neon resources are provisioned and no deployment, commit, or push is performed by this change. The supplied Neon database name was not independently verified; confirm it in the Neon dashboard and verify connectivity against a dedicated non-production database before deploying production.
 
 ## Change Inventory
 
@@ -136,13 +141,14 @@ Added:
 Modified:
 
 - [pyproject.toml](../pyproject.toml) and [uv.lock](../uv.lock): add psycopg binary and async-pool dependencies through uv.
-- [src/sentinel/config/settings.py](../src/sentinel/config/settings.py): database schema/timeout/pool settings and exclude the URL from Settings representation.
+- [src/sentinel/config/settings.py](../src/sentinel/config/settings.py): add `DATABASE_BACKEND`, typed `DB_*` settings, selected-backend URL construction with percent-encoded credentials, and conditional validation that names missing fields without echoing the password.
 - [src/sentinel/bootstrap/investigation.py](../src/sentinel/bootstrap/investigation.py): inject shared persistence while retaining legacy SQLite-path compatibility.
 - [src/sentinel/bootstrap/application.py](../src/sentinel/bootstrap/application.py): accept both adapters or the shared bundle without enabling repair by default.
 - [src/sentinel/api.py](../src/sentinel/api.py): own shared persistence lifecycle and return sanitized database failures. Security dependency implementations are unchanged.
 - [src/sentinel/main.py](../src/sentinel/main.py): use the same selected persistence bundle in the CLI and a PostgreSQL-compatible selector loop, preserving its existing incident-creation output.
 - [tests/unit/test_main.py](../tests/unit/test_main.py): isolate CLI persistence on temporary SQLite storage and verify PostgreSQL factory/lifecycle wiring without network access.
 - [tests/unit/config/test_settings.py](../tests/unit/config/test_settings.py): verify database environment values and secret-safe Settings representation.
+- [.env.example](../.env.example): preserve SQLite defaults and provide commented Neon environment names without a password or guessed database name.
 - [README.md](../README.md): link this guide.
 
 ## Persistence Refactoring Follow-Up
@@ -157,19 +163,18 @@ Modified:
 - [tests/unit/bootstrap/test_persistence.py](../tests/unit/bootstrap/test_persistence.py): remote refusal, temporary-database cleanup, environment restoration, and existing production-target safeguards.
 - [tests/integration/persistence/test_postgres.py](../tests/integration/persistence/test_postgres.py): real PostgreSQL investigation factory coverage with a fake LLM, in addition to all persistence contract tests.
 
-Local credentials are configured only in the ignored `.env`, using the supplied local server/database. No real credential values were added to tracked files. Domain models, application ports, API authentication/rate-limit implementations, and repair-safety policies remain unchanged.
+No credential values were added to tracked files. Domain models, application ports, API authentication/rate-limit implementations, and repair-safety policies remain unchanged.
 
 ## Local Validation Results
 
 - `uv run ruff format --check .`: PASS, 252 files formatted.
 - `uv run ruff check .`: PASS.
 - `uv run mypy src`: PASS, 132 source files.
-- `uv run pytest`: the first refactor run reported 255 passed, 5 skipped, and one existing live Ollama timeout; its unchanged isolated retry passed. See the final task report for the last full-suite result.
+- `uv run pytest`: PASS, 264 passed and 6 skipped.
+- `uv run pytest -q -m 'not integration'`: PASS, 256 passed, 1 skipped, 13 deselected.
 - `uv run python -m tests.fixtures.postgres`: PASS, 5 real PostgreSQL tests passed and the temporary local test database was removed.
 - `uv lock --check`: PASS, 82 packages resolved.
 
-The standard full suite leaves live PostgreSQL integrations opt-in unless `TEST_POSTGRES_URL` is configured. They were executed separately using the new local runner, not merely skipped: native UUID/JSONB/timestamp mapping, foreign keys, rollback, duplicate writes, concurrent migrations, atomic repair writes, and the investigation factory all passed against actual local PostgreSQL. Supabase transaction-pooler behavior and the production Supabase/Render endpoint remain unverified; local PostgreSQL testing is not a substitute for non-production Supabase validation.
+The standard full suite leaves live PostgreSQL integrations opt-in unless `TEST_POSTGRES_URL` is configured. They were also executed separately using the local-only runner: native UUID/JSONB/timestamp mapping, foreign keys, rollback, duplicate writes, concurrent migrations, atomic repair writes, and the investigation factory all passed against actual local PostgreSQL. The production Neon/Render endpoint remains unverified; local PostgreSQL testing is not a substitute for testing against a dedicated non-production Neon database.
 
-The earlier missing-credential connection problem is resolved by restoring the supplied local credentials in the ignored environment file. The application database connection was verified read-only, and all destructive test cleanup was confined to randomized test databases and schemas.
-
-An earlier full run hit the existing live planner integration's 60-second Ollama timeout (`LLMConnectionError: Ollama request timed out.`). The unchanged isolated retry and subsequent full suites passed. No LLM timeout, assertion, or existing test marker was changed.
+The actual Neon database name remains unverified. Confirm whether it is `neondb`, `sentinel_db`, or another name in Neon, then set `DB_NAME` in Render. No credential is required in the repository or conversation.

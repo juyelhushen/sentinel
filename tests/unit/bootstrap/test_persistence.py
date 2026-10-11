@@ -44,6 +44,27 @@ from sentinel.infrastructure.persistence.sqllite.tool_execution_repository impor
 from tests.fixtures.postgres import isolated_local_database, validate_test_target
 
 
+def _set_postgres_settings(
+    monkeypatch,
+    *,
+    host: str,
+    database: str,
+    port: str = "5432",
+    username: str = "user",
+    password: str = "fake",
+) -> None:
+    for name, value in {
+        "DATABASE_BACKEND": "postgresql",
+        "DB_HOST": host,
+        "DB_PORT": port,
+        "DB_NAME": database,
+        "DB_USERNAME": username,
+        "DB_PASSWORD": password,
+        "DB_SSLMODE": "require",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+
 def test_repository_selection(tmp_path: Path) -> None:
     sqlite = create_database(f"sqlite:///{tmp_path / 'sentinel.db'}")
     assert isinstance(sqlite, SQLiteDatabase)
@@ -108,16 +129,29 @@ def test_postgres_integration_guard_rejects_application_target(
     application_url: str,
     test_url: str,
 ) -> None:
-    monkeypatch.setenv("DATABASE_URL", application_url)
+    parameters = conninfo_to_dict(application_url)
+    _set_postgres_settings(
+        monkeypatch,
+        host=parameters["host"],
+        port=parameters["port"],
+        database=parameters["dbname"],
+        username=parameters["user"],
+        password=parameters["password"],
+    )
     with pytest.raises(pytest.fail.Exception, match="separate test database"):
         validate_test_target(test_url)
 
 
 def test_postgres_integration_guard_reads_dotenv(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./data/sentinel.db")
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
-        "DATABASE_URL=postgresql://user:fake@db.example.invalid/sentinel\n",
+        "DATABASE_BACKEND=postgresql\n"
+        "DB_HOST=db.example.invalid\n"
+        "DB_NAME=sentinel\n"
+        "DB_USERNAME=user\n"
+        "DB_PASSWORD=fake\n",
         encoding="utf-8",
     )
     with pytest.raises(pytest.fail.Exception, match="separate test database"):
@@ -125,7 +159,7 @@ def test_postgres_integration_guard_reads_dotenv(monkeypatch, tmp_path: Path) ->
 
 
 def test_postgres_integration_guard_accepts_dedicated_database(monkeypatch) -> None:
-    monkeypatch.setenv("DATABASE_URL", "postgresql://user:fake@localhost/sentinel")
+    _set_postgres_settings(monkeypatch, host="localhost", database="sentinel")
     validate_test_target("postgresql://user:fake@localhost/sentinel_test")
 
 
@@ -137,13 +171,14 @@ def test_postgres_integration_guard_rejects_ambiguous_or_invalid_target(
     test_url: str,
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./data/sentinel.db")
+    monkeypatch.setenv("DATABASE_BACKEND", "sqlite")
     with pytest.raises(pytest.fail.Exception) as error:
         validate_test_target(test_url)
     assert "fake" not in str(error.value)
 
 
 def test_local_runner_refuses_remote_endpoint_before_connecting(monkeypatch) -> None:
-    monkeypatch.setenv("DATABASE_URL", "postgresql://user:fake@remote.invalid/test")
+    _set_postgres_settings(monkeypatch, host="remote.invalid", database="test")
     with patch("tests.fixtures.postgres.psycopg.connect") as connect:
         with pytest.raises(RuntimeError, match="loopback"), isolated_local_database():
             pytest.fail("remote target must not yield")
@@ -155,9 +190,10 @@ def test_local_runner_restores_environment_and_drops_only_test_database(
     monkeypatch,
     fail: bool,
 ) -> None:
-    application_url = "postgresql://user:fake@localhost/sentinel"
+    application_url = "postgresql://user:fake@localhost:5432/sentinel?sslmode=require"
     original_test_url = "postgresql://localhost/existing_test"
-    monkeypatch.setenv("DATABASE_URL", application_url)
+    _set_postgres_settings(monkeypatch, host="localhost", database="sentinel")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./data/sentinel.db")
     monkeypatch.setenv("TEST_POSTGRES_URL", original_test_url)
     admin = MagicMock()
     context = MagicMock()
@@ -167,7 +203,7 @@ def test_local_runner_restores_environment_and_drops_only_test_database(
         with isolated_local_database():
             parameters = conninfo_to_dict(environ["TEST_POSTGRES_URL"])
             assert parameters["dbname"].startswith("sentinel_verify_")
-            assert get_settings().database_url == application_url
+            assert get_settings().database_connection_url == application_url
             if fail:
                 raise RuntimeError("test failure")
 
@@ -178,7 +214,7 @@ def test_local_runner_restores_environment_and_drops_only_test_database(
         else:
             check()
 
-    assert environ["DATABASE_URL"] == application_url
+    assert environ["DATABASE_URL"] == "sqlite:///./data/sentinel.db"
     assert environ["TEST_POSTGRES_URL"] == original_test_url
     assert admin.execute.call_count == 2
     create, drop = [call.args[0].as_string() for call in admin.execute.call_args_list]

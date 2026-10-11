@@ -28,16 +28,11 @@ class RepairPolicy:
         try:
             resolved_path.relative_to(self._repository_root)
         except ValueError as exc:
-            raise ValueError(
-                "Repair path must remain inside the repository."
-            ) from exc
+            raise ValueError("Repair path must remain inside the repository.") from exc
 
         relative_path = resolved_path.relative_to(self._repository_root)
 
-        if any(
-            part in self._PROTECTED_DIRECTORIES
-            for part in relative_path.parts
-        ):
+        if any(part in self._PROTECTED_DIRECTORIES for part in relative_path.parts):
             raise ValueError("Repair cannot modify protected directories.")
 
         if relative_path.name in self._PROTECTED_FILES:

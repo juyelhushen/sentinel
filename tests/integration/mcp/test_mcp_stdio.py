@@ -134,7 +134,11 @@ async def test_mcp_client_can_discover_and_call_read_file():
 
         assert "Hello from Sentinel MCP!" in text
 
-        assert {tool.name for tool in client.tools} == {"read_file", "search_code", "run_tests"}
+        assert {tool.name for tool in client.tools} == {
+            "read_file",
+            "search_code",
+            "run_tests",
+        }
 
     finally:
         await client.close()

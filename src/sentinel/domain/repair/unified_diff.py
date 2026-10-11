@@ -23,16 +23,12 @@ class UnifiedDiffPatchApplier(PatchApplier):
                 continue
 
             if not line.startswith("@@"):
-                raise PatchApplicationError(
-                    f"Invalid patch header: {line.strip()}"
-                )
+                raise PatchApplicationError(f"Invalid patch header: {line.strip()}")
 
             try:
                 header = line.split("@@")[1].strip()
                 source_range = header.split()[0]
-                source_start = int(
-                    source_range.split(",")[0].removeprefix("-")
-                )
+                source_start = int(source_range.split(",")[0].removeprefix("-"))
             except (IndexError, ValueError) as exc:
                 raise PatchApplicationError(
                     f"Invalid unified diff hunk header: {line.strip()}"
@@ -41,9 +37,7 @@ class UnifiedDiffPatchApplier(PatchApplier):
             target_index = source_start - 1
 
             if target_index < source_index or target_index > len(lines):
-                raise PatchApplicationError(
-                    "Patch hunk is outside the target file."
-                )
+                raise PatchApplicationError("Patch hunk is outside the target file.")
 
             output.extend(lines[source_index:target_index])
             source_index = target_index
@@ -68,10 +62,7 @@ class UnifiedDiffPatchApplier(PatchApplier):
                 content = hunk_line[1:]
 
                 if marker == " ":
-                    if (
-                        source_index >= len(lines)
-                        or lines[source_index] != content
-                    ):
+                    if source_index >= len(lines) or lines[source_index] != content:
                         raise PatchApplicationError(
                             "Patch context does not match target file."
                         )
@@ -80,10 +71,7 @@ class UnifiedDiffPatchApplier(PatchApplier):
                     source_index += 1
 
                 elif marker == "-":
-                    if (
-                        source_index >= len(lines)
-                        or lines[source_index] != content
-                    ):
+                    if source_index >= len(lines) or lines[source_index] != content:
                         raise PatchApplicationError(
                             "Patch removal does not match target file."
                         )

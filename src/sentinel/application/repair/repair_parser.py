@@ -11,35 +11,25 @@ def parse_repair_plan(content: str) -> RepairPlan:
     try:
         data = json.loads(content)
     except json.JSONDecodeError as exc:
-        raise RepairParsingError(
-            "Repair response is not valid JSON."
-        ) from exc
+        raise RepairParsingError("Repair response is not valid JSON.") from exc
 
     if not isinstance(data, dict):
-        raise RepairParsingError(
-            "Repair response must be a JSON object."
-        )
+        raise RepairParsingError("Repair response must be a JSON object.")
 
     summary = data.get("summary")
     steps = data.get("steps")
 
     if not isinstance(summary, str):
-        raise RepairParsingError(
-            "Repair plan summary must be a string."
-        )
+        raise RepairParsingError("Repair plan summary must be a string.")
 
     if not isinstance(steps, list):
-        raise RepairParsingError(
-            "Repair plan steps must be a list."
-        )
+        raise RepairParsingError("Repair plan steps must be a list.")
 
     parsed_steps: list[RepairStep] = []
 
     for index, raw_step in enumerate(steps, start=1):
         if not isinstance(raw_step, dict):
-            raise RepairParsingError(
-                f"Repair step {index} must be an object."
-            )
+            raise RepairParsingError(f"Repair step {index} must be an object.")
 
         step_number = raw_step.get("step_number")
         action = raw_step.get("action")
@@ -48,29 +38,19 @@ def parse_repair_plan(content: str) -> RepairPlan:
         patch = raw_step.get("patch")
 
         if not isinstance(step_number, int):
-            raise RepairParsingError(
-                f"Repair step {index} has invalid step_number."
-            )
+            raise RepairParsingError(f"Repair step {index} has invalid step_number.")
 
         if action != RepairStepType.APPLY_PATCH.value:
-            raise RepairParsingError(
-                f"Unsupported repair action: {action}"
-            )
+            raise RepairParsingError(f"Unsupported repair action: {action}")
 
         if not isinstance(file_path, str):
-            raise RepairParsingError(
-                f"Repair step {index} has invalid file_path."
-            )
+            raise RepairParsingError(f"Repair step {index} has invalid file_path.")
 
         if not isinstance(description, str):
-            raise RepairParsingError(
-                f"Repair step {index} has invalid description."
-            )
+            raise RepairParsingError(f"Repair step {index} has invalid description.")
 
         if not isinstance(patch, str):
-            raise RepairParsingError(
-                f"Repair step {index} has invalid patch."
-            )
+            raise RepairParsingError(f"Repair step {index} has invalid patch.")
 
         parsed_steps.append(
             RepairStep(

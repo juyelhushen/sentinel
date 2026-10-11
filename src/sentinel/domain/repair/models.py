@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 class RepairStepType(StrEnum):
     APPLY_PATCH = "apply_patch"
 
+
 @dataclass(frozen=True)
 class RepairStep:
     step_number: int

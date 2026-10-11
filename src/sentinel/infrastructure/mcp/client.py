@@ -54,7 +54,6 @@ class SentinelMCPClient:
     async def close(self) -> None:
         await self._exit_stack.aclose()
 
-
     async def list_tools(self) -> tuple[MCPTool, ...]:
         if self._session is None:
             raise RuntimeError("MCP client is not connected.")
@@ -87,6 +86,3 @@ class SentinelMCPClient:
     @property
     def tool_names(self) -> frozenset[str]:
         return frozenset(self._tools)
-
-
-

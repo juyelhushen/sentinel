@@ -23,8 +23,7 @@ async def test_repair_execution_applies_patch(
     target = tmp_path / "example.py"
 
     target.write_text(
-        "def greet():\n"
-        "    return 'hello'\n",
+        "def greet():\n    return 'hello'\n",
         encoding="utf-8",
     )
 
@@ -83,6 +82,5 @@ async def test_repair_execution_applies_patch(
     assert results[0].error is None
 
     assert target.read_text(encoding="utf-8") == (
-        "def greet():\n"
-        "    return 'hello world'\n"
+        "def greet():\n    return 'hello world'\n"
     )

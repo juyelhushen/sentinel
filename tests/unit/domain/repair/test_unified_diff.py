@@ -5,10 +5,7 @@ from sentinel.domain.repair.unified_diff import UnifiedDiffPatchApplier
 
 
 def test_applies_single_line_replacement() -> None:
-    original = (
-        "def greet():\n"
-        "    return 'hello'\n"
-    )
+    original = "def greet():\n    return 'hello'\n"
 
     patch = (
         "--- a/example.py\n"
@@ -22,17 +19,11 @@ def test_applies_single_line_replacement() -> None:
 
     result = applier.apply(original, patch)
 
-    assert result == (
-        "def greet():\n"
-        "    return 'hello world'\n"
-    )
+    assert result == ("def greet():\n    return 'hello world'\n")
 
 
 def test_applies_line_insertion() -> None:
-    original = (
-        "def greet():\n"
-        "    return 'hello'\n"
-    )
+    original = "def greet():\n    return 'hello'\n"
 
     patch = (
         "--- a/example.py\n"
@@ -47,11 +38,7 @@ def test_applies_line_insertion() -> None:
 
     result = applier.apply(original, patch)
 
-    assert result == (
-        "def greet():\n"
-        "    name = 'Sentinel'\n"
-        "    return 'hello'\n"
-    )
+    assert result == ("def greet():\n    name = 'Sentinel'\n    return 'hello'\n")
 
 
 def test_rejects_empty_patch() -> None:

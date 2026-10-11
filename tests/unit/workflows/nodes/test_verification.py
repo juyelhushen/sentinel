@@ -9,7 +9,9 @@ from sentinel.workflows.nodes.verification import verification_node
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status", [VerificationStatus.PASSED, VerificationStatus.FAILED])
+@pytest.mark.parametrize(
+    "status", [VerificationStatus.PASSED, VerificationStatus.FAILED]
+)
 async def test_verification_node_invokes_agent(status: VerificationStatus) -> None:
     verification = VerificationResult(
         status=status,

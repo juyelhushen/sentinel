@@ -53,7 +53,9 @@ async def test_execute_returns_failure_when_mcp_client_raises() -> None:
 @pytest.mark.asyncio
 async def test_execute_preserves_explicit_denial() -> None:
     class DeniedResult:
-        content = [type("Item", (), {"text": "[DENIED] Tool execution denied: read_file"})()]
+        content = [
+            type("Item", (), {"text": "[DENIED] Tool execution denied: read_file"})()
+        ]
         is_error = True
 
     client = Mock()

@@ -16,7 +16,7 @@ class RepairAgent:
         self,
         incident: Incident,
         investigation: InvestigationResult,
-        previous_attempts: tuple[RepairAttempt, ...] = ()
+        previous_attempts: tuple[RepairAttempt, ...] = (),
     ) -> RepairPlan:
         prompt = build_repair_prompt(
             incident=incident,

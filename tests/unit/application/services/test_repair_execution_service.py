@@ -1,4 +1,3 @@
-
 import pytest
 
 from sentinel.application.services.repair_loop_service import RepairLoopService

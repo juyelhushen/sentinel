@@ -117,6 +117,7 @@ async def test_mcp_gateway_combines_text_content():
 
     assert result.output == "line 1\nline 2\nfile contents"
 
+
 @pytest.mark.asyncio
 async def test_execute_rejects_unknown_tool() -> None:
     client = AsyncMock(spec=SentinelMCPClient)
@@ -135,5 +136,3 @@ async def test_execute_rejects_unknown_tool() -> None:
     assert result.error == "MCP tool is not available: unknown_tool."
 
     client.call_tool.assert_not_awaited()
-
-

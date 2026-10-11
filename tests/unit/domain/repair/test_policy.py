@@ -83,7 +83,9 @@ def test_rejects_nested_env_file(
         policy.validate_path("config/.env")
 
 
-def test_rejects_symlink_outside_repository(policy: RepairPolicy, tmp_path: Path) -> None:
+def test_rejects_symlink_outside_repository(
+    policy: RepairPolicy, tmp_path: Path
+) -> None:
     outside = tmp_path.parent / "outside.txt"
     outside.write_text("secret", encoding="utf-8")
 

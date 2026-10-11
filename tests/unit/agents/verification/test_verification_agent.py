@@ -39,10 +39,7 @@ async def test_verification_passes_when_tests_succeed() -> None:
 
     assert len(gateway.requests) == 1
     assert gateway.requests[0].tool_name == "run_tests"
-    assert (
-        gateway.requests[0].arguments["path"]
-        == "tests/test_order.py"
-    )
+    assert gateway.requests[0].arguments["path"] == "tests/test_order.py"
 
 
 @pytest.mark.asyncio
@@ -66,7 +63,6 @@ async def test_verification_fails_when_tests_fail() -> None:
     assert result.status == VerificationStatus.FAILED
     assert not result.passed
     assert "1 failed" in result.test_output
-
 
 
 @pytest.mark.asyncio

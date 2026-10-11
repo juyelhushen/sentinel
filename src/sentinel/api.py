@@ -1,7 +1,7 @@
-
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -15,10 +15,10 @@ from sentinel.bootstrap.investigation import create_investigation_service
 from sentinel.config.settings import get_settings
 from sentinel.domain.models.incident import Incident
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
+from sentinel.infrastructure.dependencies.llm import create_llm_provider
 from sentinel.infrastructure.persistence.sqllite.incident_repository import (
     SQLiteIncidentRepository,
 )
-from sentinel.infrastructure.dependencies.llm import create_llm_provider
 
 
 class CreateIncidentRequest(BaseModel):
@@ -40,7 +40,7 @@ def resolve_database_path(database_url: str) -> Path:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
 
     repository_root = settings.repository_root.resolve()
@@ -106,9 +106,7 @@ async def create_incident(
         repository=str(settings.repository_root.resolve()),
     )
 
-    incident: Incident = await request.app.state.create_incident.execute(
-        command
-    )
+    incident: Incident = await request.app.state.create_incident.execute(command)
 
     return {
         "id": str(incident.id),
@@ -126,9 +124,7 @@ async def investigate_incident(
     request: Request,
 ) -> dict[str, Any]:
     try:
-        result = await request.app.state.investigation_service.investigate(
-            incident_id
-        )
+        result = await request.app.state.investigation_service.investigate(incident_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -140,12 +136,8 @@ async def investigate_incident(
 
     return {
         "incident_id": str(incident.id) if incident else str(incident_id),
-        "incident_status": (
-            incident.status.value if incident else "unknown"
-        ),
+        "incident_status": (incident.status.value if incident else "unknown"),
         "execution_id": str(execution.id) if execution else None,
-        "execution_status": (
-            execution.status.value if execution else None
-        ),
+        "execution_status": (execution.status.value if execution else None),
         "error": result.get("error"),
     }

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
-    
+
     repository_root: Path = Field(
         default=Path("./workspace"),
         validation_alias="SENTINEL_REPOSITORY_ROOT",

@@ -26,8 +26,8 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
             connection.execute(...)
             return
 
-        with self._database.connect() as connection:
-            connection.execute(
+        with self._database.connect() as owned_connection:
+            owned_connection.execute(
                 """
                 INSERT INTO tool_executions (
                     request_id,
@@ -62,8 +62,6 @@ class SQLiteToolExecutionRepository(ToolExecutionRepository):
                     ),
                 ),
             )
-
-            # connection.commit()
 
     async def get_by_execution_id(self, execution_id: UUID) -> list[ToolExecution]:
         """Return all tool executions belonging to an execution."""

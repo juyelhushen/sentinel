@@ -1,16 +1,16 @@
 import pytest
 
-from sentinel.application.services.repair_loop_service import RepairLoopService
 from sentinel.application.services.repair_execution_service import (
     RepairExecutionService,
 )
+from sentinel.application.services.repair_loop_service import RepairLoopService
+from sentinel.domain.models.verification import VerificationResult, VerificationStatus
 from sentinel.domain.repair import (
     RepairPlan,
     RepairStep,
     RepairStepType,
 )
 from sentinel.domain.repair.retry import RepairRetryPolicy
-from sentinel.domain.models.verification import VerificationResult, VerificationStatus
 from sentinel.tools.models import ToolExecutionStatus, ToolResult
 
 

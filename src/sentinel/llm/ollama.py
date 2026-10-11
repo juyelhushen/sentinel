@@ -1,6 +1,7 @@
 import asyncio
 
-from ollama import AsyncClient
+from httpx import TransportError
+from ollama import AsyncClient, ResponseError
 
 from sentinel.llm.base import LLMProvider
 from sentinel.llm.exceptions import LLMConnectionError
@@ -40,7 +41,7 @@ class OllamaProvider(LLMProvider):
             )
         except TimeoutError as exc:
             raise LLMConnectionError("Ollama request timed out.") from exc
-        except Exception as exc:
+        except (ConnectionError, TransportError, ResponseError) as exc:
             raise LLMConnectionError("Failed to connect to Ollama.") from exc
 
         try:
@@ -60,11 +61,11 @@ class OllamaProvider(LLMProvider):
     async def health_check(self) -> bool:
         """Check if Ollama is available."""
         try:
-            response = await asyncio.wait_for(
+            await asyncio.wait_for(
                 self._client.list(),
                 timeout=self._timeout_seconds,
             )
 
             return True
-        except Exception:
+        except TimeoutError, ConnectionError, TransportError, ResponseError:
             return False

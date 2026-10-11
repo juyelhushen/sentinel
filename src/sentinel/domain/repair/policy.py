@@ -1,18 +1,23 @@
 from pathlib import Path
+from typing import ClassVar
 
 
 class RepairPolicy:
     """Defines which repository files Sentinel may modify."""
 
-    _PROTECTED_DIRECTORIES = {
-        ".git",
-    }
+    _PROTECTED_DIRECTORIES: ClassVar[frozenset[str]] = frozenset(
+        {
+            ".git",
+        }
+    )
 
-    _PROTECTED_FILES = {
-        ".env",
-        ".env.local",
-        ".env.production",
-    }
+    _PROTECTED_FILES: ClassVar[frozenset[str]] = frozenset(
+        {
+            ".env",
+            ".env.local",
+            ".env.production",
+        }
+    )
 
     def __init__(self, repository_root: Path) -> None:
         self._repository_root = repository_root.resolve()

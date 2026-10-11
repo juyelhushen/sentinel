@@ -20,7 +20,7 @@ def create_investigator_node(
 
             return {"investigation": investigation, "error": None}
 
-        except Exception as exc:
+        except ValueError as exc:
             return {
                 "investigation": None,
                 "error": str(exc),

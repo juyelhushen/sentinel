@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from sentinel.application.tools.apply_patch import ApplyPatchTool
 from sentinel.domain.repair.policy import RepairPolicy
 from sentinel.domain.repair.unified_diff import UnifiedDiffPatchApplier

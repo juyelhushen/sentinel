@@ -1,3 +1,6 @@
+from mcp.shared.exceptions import MCPError
+from pydantic import ValidationError
+
 from sentinel.application.ports.tool_gateway import ToolGateway
 from sentinel.infrastructure.mcp.client import SentinelMCPClient
 from sentinel.tools.models import ToolExecutionStatus, ToolRequest, ToolResult
@@ -26,7 +29,7 @@ class MCPToolGateway(ToolGateway):
                 request.tool_name,
                 request.arguments,
             )
-        except Exception as exc:
+        except (MCPError, ValidationError, TimeoutError) as exc:
             return ToolResult(
                 status=ToolExecutionStatus.FAILURE,
                 error=f"MCP tool execution failed: {exc}",

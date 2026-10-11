@@ -18,7 +18,7 @@ class UnifiedDiffPatchApplier(PatchApplier):
         while patch_index < len(patch_lines):
             line = patch_lines[patch_index]
 
-            if line.startswith("--- ") or line.startswith("+++ "):
+            if line.startswith(("--- ", "+++ ")):
                 patch_index += 1
                 continue
 

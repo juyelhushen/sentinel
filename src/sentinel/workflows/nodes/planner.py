@@ -1,4 +1,6 @@
 from sentinel.agents.planner.agent import PlannerAgent
+from sentinel.agents.planner.parser import PlanParsingError
+from sentinel.llm.exceptions import LLMError
 from sentinel.workflows.graph_state import SentinelGraphState
 
 
@@ -12,7 +14,7 @@ def create_planner_node(planner_agent: PlannerAgent):
             plan = await planner_agent.plan(state["incident"])
 
             return {"plan": plan, "error": None}
-        except Exception as exc:
+        except (PlanParsingError, LLMError) as exc:
             return {"plan": None, "error": str(exc)}
 
     return planner_node

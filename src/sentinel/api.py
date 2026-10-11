@@ -1,11 +1,15 @@
+import hashlib
 import secrets
+from asyncio import Lock
+from collections import deque
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from time import monotonic
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
@@ -26,6 +30,85 @@ from sentinel.infrastructure.persistence.sqllite.incident_repository import (
 class CreateIncidentRequest(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     description: str = Field(min_length=5, max_length=5000)
+
+
+class InMemoryRateLimiter:
+    """Limit requests per API key and endpoint."""
+
+    def __init__(self) -> None:
+        self._requests: dict[tuple[str, str], deque[float]] = {}
+        self._lock = Lock()
+
+    async def check(
+        self,
+        api_key: str,
+        endpoint: str,
+        max_requests: int,
+        window_seconds: int = 60,
+    ) -> None:
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        bucket_key = (key_hash, endpoint)
+
+        async with self._lock:
+            now = monotonic()
+            timestamps = self._requests.setdefault(
+                bucket_key,
+                deque(),
+            )
+
+            while timestamps and now - timestamps[0] >= window_seconds:
+                timestamps.popleft()
+
+            if len(timestamps) >= max_requests:
+                retry_after = max(
+                    1,
+                    int(window_seconds - (now - timestamps[0])),
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail="Rate limit exceeded. Try again later.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+
+            timestamps.append(now)
+
+
+class RateLimitDependency:
+    """FastAPI dependency for endpoint-specific rate limits."""
+
+    def __init__(
+        self,
+        max_requests: int,
+        window_seconds: int = 60,
+    ) -> None:
+        self._max_requests = max_requests
+        self._window_seconds = window_seconds
+
+    async def __call__(
+        self,
+        request: Request,
+        api_key: str | None = Header(
+            default=None,
+            alias="X-API-Key",
+        ),
+    ) -> None:
+        if not api_key:
+            raise HTTPException(
+                status_code=401,
+                detail="Missing API key.",
+            )
+
+        route = request.scope.get("route")
+        endpoint = getattr(route, "path", request.url.path)
+
+        limiter: InMemoryRateLimiter = request.app.state.rate_limiter
+
+        await limiter.check(
+            api_key=api_key,
+            endpoint=f"{request.method}:{endpoint}",
+            max_requests=self._max_requests,
+            window_seconds=self._window_seconds,
+        )
 
 
 api_key_header = APIKeyHeader(
@@ -96,6 +179,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.create_incident = CreateIncidentUseCase(incident_repository)
     app.state.investigation_service = investigation_service
 
+    app.state.rate_limiter = InMemoryRateLimiter()
+
     yield
 
 
@@ -114,7 +199,10 @@ async def health() -> dict[str, str]:
 
 @app.get(
     "/health/ollama",
-    dependencies=[Depends(require_api_key)],
+    dependencies=[
+        Depends(require_api_key),
+        Depends(RateLimitDependency(max_requests=10)),
+    ],
 )
 async def ollama_health(request: Request) -> dict[str, str]:
     provider = request.app.state.llm_provider
@@ -131,7 +219,10 @@ async def ollama_health(request: Request) -> dict[str, str]:
 @app.post(
     "/incidents",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_api_key)],
+    dependencies=[
+        Depends(require_api_key),
+        Depends(RateLimitDependency(max_requests=10)),
+    ],
 )
 async def create_incident(
     payload: CreateIncidentRequest,
@@ -159,7 +250,10 @@ async def create_incident(
 
 @app.post(
     "/incidents/{incident_id}/investigate",
-    dependencies=[Depends(require_api_key)],
+    dependencies=[
+        Depends(require_api_key),
+        Depends(RateLimitDependency(max_requests=10)),
+    ],
 )
 async def investigate_incident(
     incident_id: UUID,

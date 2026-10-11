@@ -18,7 +18,15 @@ def test_main_runs(monkeypatch, tmp_path: Path, capsys) -> None:
 
 
 def test_main_uses_configured_postgres_persistence(monkeypatch, capsys) -> None:
-    settings = Settings(_env_file=None, database_url="postgresql://localhost/test")
+    settings = Settings(
+        _env_file=None,
+        DATABASE_BACKEND="postgresql",
+        DB_HOST="localhost",
+        DB_NAME="test",
+        DB_USERNAME="postgres",
+        DB_PASSWORD="unit-test-password",
+        DB_SSLMODE="require",
+    )
     repository = Mock(persist=AsyncMock())
     context = AsyncMock()
     context.__aenter__.return_value = Mock(incidents=repository)
@@ -29,7 +37,7 @@ def test_main_uses_configured_postgres_persistence(monkeypatch, capsys) -> None:
     main()
 
     factory.assert_called_once_with(
-        settings.database_url,
+        settings.database_connection_url,
         schema=settings.database_schema,
         timeout_seconds=settings.database_connect_timeout_seconds,
         pool_size=settings.database_pool_size,

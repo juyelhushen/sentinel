@@ -157,7 +157,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     llm_provider = create_llm_provider()
 
     async with open_persistence(
-        settings.database_url,
+        settings.database_connection_url,
         schema=settings.database_schema,
         timeout_seconds=settings.database_connect_timeout_seconds,
         pool_size=settings.database_pool_size,

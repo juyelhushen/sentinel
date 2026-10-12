@@ -46,6 +46,25 @@ def _sanitized_connection_error(error: Exception) -> str:
     return "Connection failed; unrecognized driver details omitted."
 
 
+class _PoolConnectionErrorFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.msg == "error connecting in %r: %s" and isinstance(
+            record.args, tuple
+        ):
+            error = record.args[-1]
+            if isinstance(error, Exception):
+                logger.error(
+                    "PostgreSQL pool connection failed (%s): %s",
+                    type(error).__name__,
+                    _sanitized_connection_error(error),
+                )
+                return False
+        return True
+
+
+_pool_connection_error_filter = _PoolConnectionErrorFilter()
+
+
 class DatabaseUnavailable(RuntimeError):
     """A sanitized database configuration or connectivity failure."""
 
@@ -81,6 +100,9 @@ class PostgreSQLDatabase:
 
         self.schema = schema
         self.timeout_seconds = timeout_seconds
+        pool_logger = logging.getLogger("psycopg.pool")
+        pool_logger.addFilter(_pool_connection_error_filter)
+        pool_logger.setLevel(min(pool_logger.getEffectiveLevel(), logging.WARNING))
         self._pool: AsyncConnectionPool[AsyncConnection[dict[str, Any]]] = (
             AsyncConnectionPool(
                 conninfo=database_url,
@@ -122,7 +144,11 @@ class PostgreSQLDatabase:
                 yield connection
         except (OperationalError, InterfaceError, PoolTimeout) as error:
             logger.error(
-                "PostgreSQL connection failed (%s): %s",
+                (
+                    "PostgreSQL pool acquisition timed out (%s): %s"
+                    if isinstance(error, PoolTimeout)
+                    else "PostgreSQL connection failed (%s): %s"
+                ),
                 type(error).__name__,
                 _sanitized_connection_error(error),
             )

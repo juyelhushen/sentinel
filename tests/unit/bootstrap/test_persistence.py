@@ -94,7 +94,13 @@ async def test_postgres_lifespan_always_closes_pool(fail: bool) -> None:
     database = PostgreSQLDatabase("postgresql://example.invalid/db")
     database.open = AsyncMock()
     database.close = AsyncMock()
-    initializer = AsyncMock(side_effect=OperationalError("secret") if fail else None)
+
+    async def initialize(database: PostgreSQLDatabase) -> None:
+        database.open.assert_awaited_once()
+        if fail:
+            raise OperationalError("secret")
+
+    initializer = AsyncMock(side_effect=initialize)
     with (
         patch("sentinel.bootstrap.persistence.create_database", return_value=database),
         patch("sentinel.bootstrap.persistence.initialize_postgres_schema", initializer),
@@ -108,6 +114,22 @@ async def test_postgres_lifespan_always_closes_pool(fail: bool) -> None:
             async with open_persistence("postgresql://example.invalid/db") as bundle:
                 assert isinstance(bundle.incidents, PostgreSQLIncidentRepository)
     database.open.assert_awaited_once()
+    database.close.assert_awaited_once()
+
+
+async def test_postgres_open_failure_closes_pool_without_initializing_schema() -> None:
+    database = PostgreSQLDatabase("postgresql://example.invalid/db")
+    database.open = AsyncMock(side_effect=DatabaseUnavailable("Database unavailable."))
+    database.close = AsyncMock()
+    initializer = AsyncMock()
+    with (
+        patch("sentinel.bootstrap.persistence.create_database", return_value=database),
+        patch("sentinel.bootstrap.persistence.initialize_postgres_schema", initializer),
+        pytest.raises(DatabaseUnavailable),
+    ):
+        async with open_persistence("postgresql://example.invalid/db"):
+            pytest.fail("failed startup must not yield")
+    initializer.assert_not_awaited()
     database.close.assert_awaited_once()
 
 

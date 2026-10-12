@@ -124,7 +124,10 @@ async def test_api_lifespan_builds_postgres_dsn_from_render_settings(
     async def fake_open_persistence(database_url: str, **options):
         received["database_url"] = database_url
         received.update(options)
-        yield SimpleNamespace(incidents=repository)
+        yield SimpleNamespace(
+            incidents=repository,
+            database=Mock(),
+        )
 
     monkeypatch.setattr(api, "get_settings", lambda: settings)
     monkeypatch.setattr(api, "create_llm_provider", Mock())

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import secrets
 from asyncio import Lock
@@ -24,7 +25,11 @@ from sentinel.bootstrap.persistence import open_persistence
 from sentinel.bootstrap.persistence import resolve_database_path as resolve_sqlite_path
 from sentinel.config.settings import get_settings
 from sentinel.domain.models.incident import Incident
-from sentinel.infrastructure.database.postgres import DatabaseUnavailable
+from sentinel.infrastructure.database.postgres import (
+    DatabaseUnavailable,
+    PostgreSQLDatabase,
+)
+from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
 
 
@@ -167,6 +172,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             repository_root=repository_root,
             persistence=persistence,
         )
+        app.state.database = persistence.database
         app.state.settings = settings
         app.state.llm_provider = llm_provider
         app.state.incident_repository = persistence.incidents
@@ -278,3 +284,27 @@ async def investigate_incident(
         "execution_status": (execution.status.value if execution else None),
         "error": result.get("error"),
     }
+
+
+@app.get("/health/ready")
+async def readiness(request: Request) -> dict[str, str]:
+    """Check whether Sentinel can access its database."""
+    database = request.app.state.database
+
+    if isinstance(database, PostgreSQLDatabase):
+        async with database.connection() as connection:
+            await connection.execute("SELECT 1")
+    elif isinstance(database, SQLiteDatabase):
+
+        def check_sqlite() -> None:
+            with database.connect() as connection:
+                connection.execute("SELECT 1")
+
+        await asyncio.to_thread(check_sqlite)
+    else:
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Try again later.",
+        )
+
+    return {"status": "ready", "database": "ok"}

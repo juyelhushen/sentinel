@@ -49,6 +49,7 @@ class Persistence:
     executions: ExecutionRepository
     tool_executions: ToolExecutionRepository
     repairs: RepairRepository
+    database: SQLiteDatabase | PostgreSQLDatabase
 
 
 def resolve_database_path(database_url: str) -> Path:
@@ -88,12 +89,14 @@ def create_persistence(database: SQLiteDatabase | PostgreSQLDatabase) -> Persist
             PostgreSQLExecutionRepository(database),
             PostgreSQLToolExecutionRepository(database),
             PostgreSQLRepairRepository(database),
+            database=database,
         )
     return Persistence(
         SQLiteIncidentRepository(database),
         SQLiteExecutionRepository(database),
         SQLiteToolExecutionRepository(database),
         SQLiteRepairRepository(database),
+        database=database,
     )
 
 

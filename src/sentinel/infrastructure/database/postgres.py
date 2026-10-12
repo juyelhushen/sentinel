@@ -1,3 +1,4 @@
+import logging
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -7,6 +8,42 @@ from psycopg import AsyncConnection, InterfaceError, OperationalError, Programmi
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool, PoolTimeout
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitized_connection_error(error: Exception) -> str:
+    message = str(error).casefold()
+    diagnostics = (
+        (r"authentication failed|no pg_hba.conf entry", "Authentication failed."),
+        (
+            (
+                r"could not translate host name|name or service not known|"
+                r"nodename nor servname|name resolution|getaddrinfo failed"
+            ),
+            "DNS resolution failed.",
+        ),
+        (
+            r"\bssl\b|\btls\b|certificate",
+            "TLS negotiation or certificate validation failed.",
+        ),
+        (r"database .* does not exist", "Requested database does not exist."),
+        (
+            (
+                r"connection refused|network is unreachable|no route to host|"
+                r"connection timed out|timeout expired|connection reset|server closed"
+            ),
+            "Network connection failed or timed out.",
+        ),
+    )
+    for pattern, diagnostic in diagnostics:
+        if re.search(pattern, message):
+            return diagnostic
+    if isinstance(error, PoolTimeout):
+        return (
+            "Timed out waiting for a pooled connection; underlying cause unavailable."
+        )
+    return "Connection failed; unrecognized driver details omitted."
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -83,7 +120,12 @@ class PostgreSQLDatabase:
                         (f'"{self.schema}", pg_catalog',),
                     )
                 yield connection
-        except OperationalError, InterfaceError, PoolTimeout:
+        except (OperationalError, InterfaceError, PoolTimeout) as error:
+            logger.error(
+                "PostgreSQL connection failed (%s): %s",
+                type(error).__name__,
+                _sanitized_connection_error(error),
+            )
             raise DatabaseUnavailable(
                 "Database unavailable. Check connectivity, TLS, and database credentials."
             ) from None

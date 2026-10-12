@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from psycopg import InterfaceError, OperationalError
@@ -20,6 +20,10 @@ def test_postgres_pool_configuration_preserves_secure_url(scheme: str) -> None:
     assert database._pool.kwargs["prepare_threshold"] is None
     assert database._pool.kwargs["connect_timeout"] == 7
     assert database._pool.max_size == 3
+    assert database._pool.min_size == 0
+    assert database._pool.timeout == 7
+    assert database._pool.reconnect_timeout == 7
+    assert database._pool.closed
 
 
 @pytest.mark.parametrize("sslmode", ["disable", "allow", "prefer"])
@@ -131,6 +135,83 @@ async def test_connection_failure_is_sanitized(
             else "Connection failed; unrecognized driver details omitted."
         )
     assert diagnostic in record.getMessage()
+    if error_type is PoolTimeout:
+        assert "pool acquisition timed out" in record.getMessage()
+    else:
+        assert "PostgreSQL connection failed" in record.getMessage()
+
+
+@pytest.mark.parametrize(
+    ("message", "diagnostic"),
+    [
+        (
+            'password authentication failed for user "private-user"',
+            "Authentication failed.",
+        ),
+        ('could not translate host name "private-host"', "DNS resolution failed."),
+        (
+            "SSL error: certificate verify failed",
+            "TLS negotiation or certificate validation failed.",
+        ),
+        ('database "private-db" does not exist', "Requested database does not exist."),
+        ("connection refused", "Network connection failed or timed out."),
+    ],
+)
+async def test_pool_worker_failure_is_logged_without_secrets(
+    caplog: pytest.LogCaptureFixture, message: str, diagnostic: str
+) -> None:
+    url = "postgresql://private-user:private-password@private-host/private-db"
+    details = f"{message}\n{url}\npassword=private-password token=private-token"
+    database = PostgreSQLDatabase(url, timeout_seconds=1, pool_size=1)
+    with (
+        patch(
+            "psycopg.AsyncConnection.connect",
+            new=AsyncMock(side_effect=OperationalError(details)),
+        ) as connect,
+        caplog.at_level(logging.ERROR),
+    ):
+        await database.open()
+        try:
+            with pytest.raises(DatabaseUnavailable):
+                async with database.connection(select_schema=False):
+                    pytest.fail("failed pool must not yield")
+        finally:
+            await database.close()
+    connect.assert_awaited()
+    messages = [record.getMessage() for record in caplog.records]
+    assert (
+        f"PostgreSQL pool connection failed (OperationalError): {diagnostic}"
+        in messages
+    )
+    assert any("pool acquisition timed out (PoolTimeout)" in item for item in messages)
+    for secret in (
+        url,
+        "private-user",
+        "private-password",
+        "private-host",
+        "private-db",
+        "private-token",
+    ):
+        assert secret not in caplog.text
+        assert all(secret not in repr(record.args) for record in caplog.records)
+    assert all(record.exc_info is None for record in caplog.records)
+
+
+async def test_pool_acquisition_timeout_is_not_a_connection_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    database = PostgreSQLDatabase("postgresql://example.invalid/db")
+    context = AsyncMock()
+    context.__aenter__.side_effect = PoolTimeout("private-pool-name")
+    database._pool = Mock()
+    database._pool.connection.return_value = context
+    with caplog.at_level(logging.ERROR), pytest.raises(DatabaseUnavailable):
+        async with database.connection():
+            pytest.fail("timed out acquisition must not yield")
+    assert len(caplog.records) == 1
+    assert "pool acquisition timed out (PoolTimeout)" in caplog.text
+    assert "PostgreSQL pool connection failed" not in caplog.text
+    assert "private-pool-name" not in caplog.text
 
 
 async def test_pool_lifecycle_and_transaction_scoped_schema() -> None:

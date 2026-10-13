@@ -156,7 +156,11 @@ async def test_repeated_and_concurrent_schema_initialization_preserves_data(
     assert (await repository.get(incident.id)).id == incident.id
     async with database.connection() as connection:
         cursor = await connection.execute("SELECT version FROM schema_migrations")
-        assert await cursor.fetchall() == [{"version": 1}, {"version": 2}]
+        assert await cursor.fetchall() == [
+            {"version": 1},
+            {"version": 2},
+            {"version": 3},
+        ]
 
 
 async def test_distributed_rate_limit_is_atomic_across_store_instances(
@@ -203,24 +207,56 @@ async def test_rate_limit_buckets_are_isolated_and_expired_rows_are_cleaned(
             """
             INSERT INTO rate_limit_requests (
                 api_key_hash, endpoint, requested_at, expires_at
-            ) VALUES (
-                %s, %s, clock_timestamp() - INTERVAL '2 minutes',
-                clock_timestamp() - INTERVAL '1 minute'
             )
+            SELECT %s, %s, clock_timestamp() - INTERVAL '2 minutes',
+                   clock_timestamp() - INTERVAL '1 minute'
+            FROM generate_series(1, 503)
             """,
             (expired_key, "GET:/expired"),
         )
+        await connection.execute(
+            """
+            INSERT INTO rate_limit_requests (
+                api_key_hash, endpoint, requested_at, expires_at
+            ) VALUES (
+                %s, %s, clock_timestamp(), clock_timestamp() + INTERVAL '1 hour'
+            )
+            """,
+            (expired_key, "GET:/active"),
+        )
+        await connection.execute(
+            "UPDATE rate_limit_cleanup_state "
+            "SET last_cleanup_at = clock_timestamp() - INTERVAL '2 minutes' "
+            "WHERE singleton_id = 1"
+        )
 
-    assert await store.check_and_record("cleanup-trigger", "GET:/health", 5) is None
+    first = PostgreSQLRateLimitStore(database)
+    second = PostgreSQLRateLimitStore(database)
+
+    async def trigger_cleanup(index: int) -> int | None:
+        limiter = first if index % 2 == 0 else second
+        return await limiter.check_and_record(f"cleanup-{index}", "GET:/cleanup", 50)
+
+    results = await asyncio.gather(*(trigger_cleanup(index) for index in range(20)))
+    assert results == [None] * 20
     async with database.connection() as connection:
         cursor = await connection.execute(
             "SELECT COUNT(*) AS request_count FROM rate_limit_requests "
             "WHERE api_key_hash = %s AND endpoint = %s",
             (expired_key, "GET:/expired"),
         )
-        row = await cursor.fetchone()
-    assert row is not None
-    assert row["request_count"] == 0
+        expired = await cursor.fetchone()
+        cursor = await connection.execute(
+            "SELECT COUNT(*) AS request_count FROM rate_limit_requests "
+            "WHERE api_key_hash = %s AND endpoint = %s "
+            "AND expires_at > clock_timestamp()",
+            (expired_key, "GET:/active"),
+        )
+        active = await cursor.fetchone()
+    assert expired is not None
+    assert active is not None
+    assert expired["request_count"] == 3
+    assert active["request_count"] == 1
 
 
 async def test_repair_attempts_steps_verifications_and_atomic_update(

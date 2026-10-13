@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import logging
 import secrets
 from asyncio import Lock
 from collections import deque
@@ -7,7 +8,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from time import monotonic
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
@@ -31,6 +32,10 @@ from sentinel.infrastructure.database.postgres import (
 )
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
+from sentinel.infrastructure.logging_config import configure_logging
+from sentinel.infrastructure.middleware import RequestIDMiddleware
+
+logger = logging.getLogger("sentinel.api")
 
 
 class CreateIncidentRequest(BaseModel):
@@ -182,12 +187,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
 
 
+configure_logging()
+
 app = FastAPI(
     title="Sentinel",
     description="Autonomous Multi-Agent Engineering Ops Copilot",
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(RequestIDMiddleware)
 
 
 @app.exception_handler(DatabaseUnavailable)
@@ -200,7 +209,12 @@ async def database_error_handler(request: Request, exc: Exception) -> JSONRespon
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+async def health(
+    request_id: Annotated[
+        str | None,
+        Header(alias="X-Request-ID"),
+    ] = None,
+) -> dict[str, str]:
     return {"status": "ok", "service": "sentinel"}
 
 

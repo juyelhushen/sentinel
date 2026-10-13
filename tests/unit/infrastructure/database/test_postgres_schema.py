@@ -7,7 +7,7 @@ from sentinel.infrastructure.database.postgres_schema import initialize_postgres
 async def test_schema_version_prevents_repeated_migration() -> None:
     database = PostgreSQLDatabase("postgresql://example.invalid/db")
     cursor = AsyncMock()
-    cursor.fetchall.side_effect = [[], [{"version": 1}, {"version": 2}]]
+    cursor.fetchall.side_effect = [[], [{"version": 1}, {"version": 2}, {"version": 3}]]
     connection = AsyncMock()
     connection.execute.return_value = cursor
     context = AsyncMock()
@@ -35,6 +35,10 @@ async def test_schema_version_prevents_repeated_migration() -> None:
     )
     assert any(
         "idx_rate_limit_requests_expiration" in statement
+        for statement in initial_statements
+    )
+    assert any(
+        "CREATE TABLE rate_limit_cleanup_state" in statement
         for statement in initial_statements
     )
     assert not any(
@@ -65,8 +69,9 @@ async def test_existing_version_one_schema_receives_rate_limit_migration() -> No
     statements = [str(call.args[0]) for call in connection.execute.await_args_list]
     assert any("CREATE TABLE rate_limit_requests" in item for item in statements)
     assert not any("CREATE TABLE incidents" in item for item in statements)
+    assert any("CREATE TABLE rate_limit_cleanup_state" in item for item in statements)
     assert any(
-        call.args[1] == (2,)
+        call.args[1] == (3,)
         for call in connection.execute.await_args_list
         if "INSERT INTO schema_migrations" in str(call.args[0])
     )

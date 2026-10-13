@@ -1,6 +1,8 @@
 import hashlib
 import logging
+from typing import Any
 
+from psycopg import AsyncConnection
 from psycopg import Error as PostgreSQLError
 
 from sentinel.infrastructure.database.postgres import (
@@ -9,6 +11,9 @@ from sentinel.infrastructure.database.postgres import (
 )
 
 logger = logging.getLogger(__name__)
+
+RATE_LIMIT_CLEANUP_INTERVAL_SECONDS = 60
+RATE_LIMIT_CLEANUP_BATCH_SIZE = 500
 
 
 class PostgreSQLRateLimitStore:
@@ -28,10 +33,7 @@ class PostgreSQLRateLimitStore:
         lock_key = f"{key_hash.hex()}:{endpoint}"
         try:
             async with self._database.connection() as connection:
-                await connection.execute(
-                    "DELETE FROM rate_limit_requests "
-                    "WHERE expires_at <= clock_timestamp()"
-                )
+                await self._cleanup_expired_requests(connection)
                 await connection.execute(
                     "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
                     (lock_key,),
@@ -82,3 +84,55 @@ class PostgreSQLRateLimitStore:
             raise DatabaseUnavailable(
                 "Rate limiting is temporarily unavailable."
             ) from None
+
+    async def _cleanup_expired_requests(
+        self, connection: AsyncConnection[dict[str, Any]]
+    ) -> None:
+        lock_cursor = await connection.execute(
+            "SELECT pg_try_advisory_xact_lock(1397050964, 1) AS acquired"
+        )
+        lock_result = await lock_cursor.fetchone()
+        if lock_result is None:
+            raise DatabaseUnavailable("Rate limiting is temporarily unavailable.")
+        if not lock_result["acquired"]:
+            return
+
+        state_cursor = await connection.execute(
+            """
+            SELECT last_cleanup_at IS NULL OR last_cleanup_at <=
+                   clock_timestamp() - (%s * INTERVAL '1 second') AS due
+            FROM rate_limit_cleanup_state
+            WHERE singleton_id = 1
+            FOR UPDATE
+            """,
+            (RATE_LIMIT_CLEANUP_INTERVAL_SECONDS,),
+        )
+        state = await state_cursor.fetchone()
+        if state is None:
+            raise DatabaseUnavailable("Rate limiting is temporarily unavailable.")
+        if not state["due"]:
+            return
+
+        await connection.execute(
+            """
+            WITH expired_rows AS (
+                SELECT ctid
+                FROM rate_limit_requests
+                WHERE expires_at <= clock_timestamp()
+                ORDER BY expires_at
+                LIMIT %s
+                FOR UPDATE SKIP LOCKED
+            )
+            DELETE FROM rate_limit_requests AS requests
+            USING expired_rows
+            WHERE requests.ctid = expired_rows.ctid
+            """,
+            (RATE_LIMIT_CLEANUP_BATCH_SIZE,),
+        )
+        await connection.execute(
+            """
+            UPDATE rate_limit_cleanup_state
+            SET last_cleanup_at = clock_timestamp()
+            WHERE singleton_id = 1
+            """
+        )

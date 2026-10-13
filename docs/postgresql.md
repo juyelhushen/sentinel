@@ -14,7 +14,7 @@ The pool is opened at startup and closed at shutdown, including failed schema in
 
 When PostgreSQL is selected, protected endpoints share a PostgreSQL-backed sliding window across app instances and restarts. Every request stores SHA-256 bytes for its API-key identifier, the method and route-template endpoint identifier, and database-clock request/expiry timestamps. Raw API keys are not sent to SQL or stored. A transaction-scoped advisory lock serializes checks for a specific key-and-endpoint bucket; the count and insert happen in that transaction, so concurrent instances cannot both consume the same remaining slot. Hash collisions can only serialize unrelated buckets; they cannot bypass the limit.
 
-The current limits remain 10 requests per 60 seconds per API key and endpoint. Rejected requests receive HTTP 429 and a `Retry-After` value rounded up to the oldest request's expiration. Expired rows are deleted through the indexed expiration column on each rate-limit operation, preventing stale key buckets from accumulating during active use. PostgreSQL autovacuum reclaims the resulting dead tuples. The store uses the existing application pool and schema; it creates no second pool or database configuration.
+The current limits remain 10 requests per 60 seconds per API key and endpoint. Rejected requests receive HTTP 429 and a `Retry-After` value rounded up to the oldest request's expiration. Expired rows are cleaned at most once per 60 seconds across all app instances, in batches of at most 500 rows, using the indexed expiration column. A transaction-scoped PostgreSQL advisory lock and a singleton cleanup-state row coordinate workers and persist the interval across restarts. Requests that cannot obtain the nonblocking cleanup lock skip cleanup and continue normal rate enforcement. PostgreSQL autovacuum reclaims deleted tuples. The store uses the existing application pool and schema; it creates no second pool or database configuration.
 
 Rate-limit database errors fail closed: the protected request receives the existing sanitized HTTP 503 response. The application never falls back to per-process memory when PostgreSQL is selected or unavailable. Explicit SQLite mode retains the existing in-memory limiter for local single-process development and tests; it is not distributed or restart-persistent.
 
@@ -54,7 +54,7 @@ The Neon database name cannot be discovered safely from this repository. Confirm
 
 ## Schema Initialization and Permissions
 
-The application creates a dedicated `sentinel` schema by default, then records migrations 1 and 2 in that schema's `schema_migrations` table. A transaction-scoped advisory lock serializes concurrent startups. Schema creation, tables, indexes, and version records commit atomically. Subsequent startups skip applied migrations. A newer unsupported migration version fails closed.
+The application creates a dedicated `sentinel` schema by default, then records migrations 1, 2, and 3 in that schema's `schema_migrations` table. A transaction-scoped advisory lock serializes concurrent startups. Schema creation, tables, indexes, and version records commit atomically. Subsequent startups skip applied migrations. A newer unsupported migration version fails closed.
 
 Tables cover all existing persistence contracts:
 
@@ -65,6 +65,7 @@ Tables cover all existing persistence contracts:
 - `repair_steps`: cascading attempt foreign key and patch data.
 - `verifications`: cascading attempt foreign key and verification outcomes.
 - `rate_limit_requests`: 32-byte API-key hashes, endpoint identifiers, request timestamps, and expiration timestamps, indexed by bucket and expiration.
+- `rate_limit_cleanup_state`: singleton timestamp used to coordinate and throttle expired-row cleanup across instances and restarts.
 
 All SQLite relationship constraints and lookup indexes are preserved. The audit execution ID deliberately has no foreign key, matching SQLite: current investigator requests can have no execution ID, and existing audit records may use an unlinked UUID. This migration does not change that application-level correlation behavior.
 

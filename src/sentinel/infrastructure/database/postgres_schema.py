@@ -97,6 +97,16 @@ _RATE_LIMIT_SCHEMA = (
     ),
 )
 
+_RATE_LIMIT_CLEANUP_SCHEMA = (
+    """
+    CREATE TABLE rate_limit_cleanup_state (
+        singleton_id SMALLINT PRIMARY KEY CHECK (singleton_id = 1),
+        last_cleanup_at TIMESTAMPTZ
+    )
+    """,
+    "INSERT INTO rate_limit_cleanup_state (singleton_id) VALUES (1)",
+)
+
 
 async def initialize_postgres_schema(database: PostgreSQLDatabase) -> None:
     """Apply versioned, atomic migrations under a cross-process lock."""
@@ -124,7 +134,7 @@ async def initialize_postgres_schema(database: PostgreSQLDatabase) -> None:
         )
         cursor = await connection.execute("SELECT version FROM schema_migrations")
         versions = {row["version"] for row in await cursor.fetchall()}
-        if versions - {1, 2}:
+        if versions - {1, 2, 3}:
             raise RuntimeError("Database schema is newer than this Sentinel version.")
         if 1 not in versions:
             for statement in _INITIAL_SCHEMA:
@@ -137,4 +147,10 @@ async def initialize_postgres_schema(database: PostgreSQLDatabase) -> None:
                 await connection.execute(statement)
             await connection.execute(
                 "INSERT INTO schema_migrations (version) VALUES (%s)", (2,)
+            )
+        if 3 not in versions:
+            for statement in _RATE_LIMIT_CLEANUP_SCHEMA:
+                await connection.execute(statement)
+            await connection.execute(
+                "INSERT INTO schema_migrations (version) VALUES (%s)", (3,)
             )

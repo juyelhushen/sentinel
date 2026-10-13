@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from collections.abc import AsyncIterator
 from dataclasses import replace
@@ -27,6 +28,9 @@ from sentinel.infrastructure.persistence.postgres.execution_repository import (
 )
 from sentinel.infrastructure.persistence.postgres.incident_repository import (
     PostgreSQLIncidentRepository,
+)
+from sentinel.infrastructure.persistence.postgres.rate_limiter import (
+    PostgreSQLRateLimitStore,
 )
 from sentinel.infrastructure.persistence.postgres.repair_repository import (
     PostgreSQLRepairRepository,
@@ -152,7 +156,71 @@ async def test_repeated_and_concurrent_schema_initialization_preserves_data(
     assert (await repository.get(incident.id)).id == incident.id
     async with database.connection() as connection:
         cursor = await connection.execute("SELECT version FROM schema_migrations")
-        assert await cursor.fetchall() == [{"version": 1}]
+        assert await cursor.fetchall() == [{"version": 1}, {"version": 2}]
+
+
+async def test_distributed_rate_limit_is_atomic_across_store_instances(
+    database: PostgreSQLDatabase,
+) -> None:
+    first = PostgreSQLRateLimitStore(database)
+    second = PostgreSQLRateLimitStore(database)
+    raw_key = "integration-private-api-key"
+
+    async def attempt(index: int) -> bool:
+        store = first if index % 2 == 0 else second
+        return await store.check_and_record(raw_key, "POST:/incidents", 5, 60) is None
+
+    allowed = await asyncio.gather(*(attempt(index) for index in range(20)))
+
+    assert sum(allowed) == 5
+    async with database.connection() as connection:
+        cursor = await connection.execute(
+            "SELECT api_key_hash FROM rate_limit_requests "
+            "WHERE endpoint = %s ORDER BY requested_at",
+            ("POST:/incidents",),
+        )
+        rows = await cursor.fetchall()
+    expected_hash = hashlib.sha256(raw_key.encode()).digest()
+    assert len(rows) == 5
+    assert all(row["api_key_hash"] == expected_hash for row in rows)
+    assert all(raw_key.encode() not in row["api_key_hash"] for row in rows)
+
+
+async def test_rate_limit_buckets_are_isolated_and_expired_rows_are_cleaned(
+    database: PostgreSQLDatabase,
+) -> None:
+    store = PostgreSQLRateLimitStore(database)
+    key = "isolated-private-api-key"
+
+    assert await store.check_and_record(key, "GET:/health", 1, 60) is None
+    assert await store.check_and_record(key, "GET:/health", 1, 60) is not None
+    assert await store.check_and_record("other-key", "GET:/health", 1, 60) is None
+    assert await store.check_and_record(key, "POST:/incidents", 1, 60) is None
+
+    expired_key = hashlib.sha256(b"expired-key").digest()
+    async with database.connection() as connection:
+        await connection.execute(
+            """
+            INSERT INTO rate_limit_requests (
+                api_key_hash, endpoint, requested_at, expires_at
+            ) VALUES (
+                %s, %s, clock_timestamp() - INTERVAL '2 minutes',
+                clock_timestamp() - INTERVAL '1 minute'
+            )
+            """,
+            (expired_key, "GET:/expired"),
+        )
+
+    assert await store.check_and_record("cleanup-trigger", "GET:/health", 5) is None
+    async with database.connection() as connection:
+        cursor = await connection.execute(
+            "SELECT COUNT(*) AS request_count FROM rate_limit_requests "
+            "WHERE api_key_hash = %s AND endpoint = %s",
+            (expired_key, "GET:/expired"),
+        )
+        row = await cursor.fetchone()
+    assert row is not None
+    assert row["request_count"] == 0
 
 
 async def test_repair_attempts_steps_verifications_and_atomic_update(

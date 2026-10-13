@@ -78,6 +78,25 @@ _INITIAL_SCHEMA = (
     "CREATE INDEX idx_verifications_attempt_id ON verifications(repair_attempt_id)",
 )
 
+_RATE_LIMIT_SCHEMA = (
+    """
+    CREATE TABLE rate_limit_requests (
+        api_key_hash BYTEA NOT NULL CHECK (octet_length(api_key_hash) = 32),
+        endpoint TEXT NOT NULL,
+        requested_at TIMESTAMPTZ NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL
+    )
+    """,
+    (
+        "CREATE INDEX idx_rate_limit_requests_bucket "
+        "ON rate_limit_requests (api_key_hash, endpoint, requested_at)"
+    ),
+    (
+        "CREATE INDEX idx_rate_limit_requests_expiration "
+        "ON rate_limit_requests (expires_at)"
+    ),
+)
+
 
 async def initialize_postgres_schema(database: PostgreSQLDatabase) -> None:
     """Apply versioned, atomic migrations under a cross-process lock."""
@@ -105,11 +124,17 @@ async def initialize_postgres_schema(database: PostgreSQLDatabase) -> None:
         )
         cursor = await connection.execute("SELECT version FROM schema_migrations")
         versions = {row["version"] for row in await cursor.fetchall()}
-        if versions - {1}:
+        if versions - {1, 2}:
             raise RuntimeError("Database schema is newer than this Sentinel version.")
         if 1 not in versions:
             for statement in _INITIAL_SCHEMA:
                 await connection.execute(statement)
             await connection.execute(
                 "INSERT INTO schema_migrations (version) VALUES (%s)", (1,)
+            )
+        if 2 not in versions:
+            for statement in _RATE_LIMIT_SCHEMA:
+                await connection.execute(statement)
+            await connection.execute(
+                "INSERT INTO schema_migrations (version) VALUES (%s)", (2,)
             )

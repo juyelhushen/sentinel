@@ -4,11 +4,19 @@
 
 Sentinel supports SQLite and PostgreSQL without changing its domain models or application repository ports. `DATABASE_BACKEND` selects the adapter. `sentinel.bootstrap.persistence` constructs one bundle of incident, execution, audit, and repair repositories and owns its lifecycle through `open_persistence`.
 
-FastAPI lifespan shares that bundle with incident creation and investigation. The investigation factory delegates tool/agent/graph construction to the canonical application factory and remains compatible with its legacy SQLite `database_path` argument. The application factory accepts either database adapter or an already initialized persistence bundle. The CLI entry point also uses the same managed, configuration-selected persistence instead of forcing the legacy SQLite helper. API startup does not enable autonomous repair. Authentication, constant-time API-key comparison, endpoint rate limits, health endpoints, and Ollama settings remain unchanged.
+FastAPI lifespan shares that bundle with incident creation, investigation, and rate limiting. The investigation factory delegates tool/agent/graph construction to the canonical application factory and remains compatible with its legacy SQLite `database_path` argument. The application factory accepts either database adapter or an already initialized persistence bundle. The CLI entry point also uses the same managed, configuration-selected persistence instead of forcing the legacy SQLite helper. API startup does not enable autonomous repair. Authentication, constant-time API-key comparison, endpoint-specific limits, health endpoints, and Ollama settings remain unchanged.
 
 PostgreSQL uses psycopg 3 and a bounded asynchronous connection pool per application process. Each repository operation borrows a connection for one transaction; a repair attempt and its steps/verifications are written atomically on the same connection. Incident, execution, and audit writes also accept an injected PostgreSQL connection without committing, rolling back, or closing it. The caller must acquire it through `PostgreSQLDatabase.connection()` so the schema is selected for that transaction.
 
 The pool is opened at startup and closed at shutdown, including failed schema initialization. A shared PostgreSQL transaction scope consistently preserves injected connection ownership across repository writes. Database SQL and connection waits are asynchronous. SQLite adapter-owned operations use the managed transaction context, which commits or rolls back and always closes the connection; injected connections remain caller-owned. SQLite schema initialization is offloaded from the API event loop. SQLite repository SQL remains synchronous, as before.
+
+## Distributed Rate Limiting
+
+When PostgreSQL is selected, protected endpoints share a PostgreSQL-backed sliding window across app instances and restarts. Every request stores SHA-256 bytes for its API-key identifier, the method and route-template endpoint identifier, and database-clock request/expiry timestamps. Raw API keys are not sent to SQL or stored. A transaction-scoped advisory lock serializes checks for a specific key-and-endpoint bucket; the count and insert happen in that transaction, so concurrent instances cannot both consume the same remaining slot. Hash collisions can only serialize unrelated buckets; they cannot bypass the limit.
+
+The current limits remain 10 requests per 60 seconds per API key and endpoint. Rejected requests receive HTTP 429 and a `Retry-After` value rounded up to the oldest request's expiration. Expired rows are deleted through the indexed expiration column on each rate-limit operation, preventing stale key buckets from accumulating during active use. PostgreSQL autovacuum reclaims the resulting dead tuples. The store uses the existing application pool and schema; it creates no second pool or database configuration.
+
+Rate-limit database errors fail closed: the protected request receives the existing sanitized HTTP 503 response. The application never falls back to per-process memory when PostgreSQL is selected or unavailable. Explicit SQLite mode retains the existing in-memory limiter for local single-process development and tests; it is not distributed or restart-persistent.
 
 ## Environment Variables
 
@@ -46,7 +54,7 @@ The Neon database name cannot be discovered safely from this repository. Confirm
 
 ## Schema Initialization and Permissions
 
-The application creates a dedicated `sentinel` schema by default, then records migration version 1 in that schema's `schema_migrations` table. A transaction-scoped advisory lock serializes concurrent startups. Schema creation, tables, indexes, and the version record commit atomically. Subsequent startups skip applied migrations. A newer unsupported migration version fails closed.
+The application creates a dedicated `sentinel` schema by default, then records migrations 1 and 2 in that schema's `schema_migrations` table. A transaction-scoped advisory lock serializes concurrent startups. Schema creation, tables, indexes, and version records commit atomically. Subsequent startups skip applied migrations. A newer unsupported migration version fails closed.
 
 Tables cover all existing persistence contracts:
 
@@ -56,6 +64,7 @@ Tables cover all existing persistence contracts:
 - `repair_attempts`: cascading execution foreign key, unique `(execution_id, attempt_number)`, plan UUID/summary, approval metadata, and execution error.
 - `repair_steps`: cascading attempt foreign key and patch data.
 - `verifications`: cascading attempt foreign key and verification outcomes.
+- `rate_limit_requests`: 32-byte API-key hashes, endpoint identifiers, request timestamps, and expiration timestamps, indexed by bucket and expiration.
 
 All SQLite relationship constraints and lookup indexes are preserved. The audit execution ID deliberately has no foreign key, matching SQLite: current investigator requests can have no execution ID, and existing audit records may use an unlinked UUID. This migration does not change that application-level correlation behavior.
 
@@ -115,7 +124,7 @@ The existing full suite includes live Ollama integration tests; an Ollama timeou
 
 All four existing repository contracts are implemented for PostgreSQL, including repair attempts, steps, and verifications. Autonomous repair is still disabled in the API. No SQLite-to-PostgreSQL data-transfer tool, multi-operation unit of work for an entire investigation, or separate offline migration CLI is added. An investigation persists through the existing sequence of repository operations; individual operations and repair writes are atomic.
 
-`/health` remains public and does not query the database. Startup requires successful database schema initialization; a failed startup prevents serving any routes until configuration/connectivity is corrected. Runtime PostgreSQL failures return a generic HTTP 503. Endpoint rate limiting remains per-process/in-memory and is not distributed across Render instances, matching existing behavior.
+`/health` remains public and does not query the database. Startup requires successful database schema initialization; a failed startup prevents serving any routes until configuration/connectivity is corrected. Runtime PostgreSQL and rate-limit storage failures return a generic HTTP 503. PostgreSQL endpoint rate limits are shared across Render instances; explicitly configured SQLite mode remains single-process/in-memory for development.
 
 No Neon resources are provisioned and no deployment, commit, or push is performed by this change. The supplied Neon database name was not independently verified; confirm it in the Neon dashboard and verify connectivity against a dedicated non-production database before deploying production.
 
@@ -144,7 +153,9 @@ Modified:
 - [src/sentinel/config/settings.py](../src/sentinel/config/settings.py): add `DATABASE_BACKEND`, typed `DB_*` settings, selected-backend URL construction with percent-encoded credentials, and conditional validation that names missing fields without echoing the password.
 - [src/sentinel/bootstrap/investigation.py](../src/sentinel/bootstrap/investigation.py): inject shared persistence while retaining legacy SQLite-path compatibility.
 - [src/sentinel/bootstrap/application.py](../src/sentinel/bootstrap/application.py): accept both adapters or the shared bundle without enabling repair by default.
-- [src/sentinel/api.py](../src/sentinel/api.py): own shared persistence lifecycle and return sanitized database failures. Security dependency implementations are unchanged.
+- [src/sentinel/api.py](../src/sentinel/api.py): own shared persistence lifecycle and return sanitized database failures; protected PostgreSQL endpoints use the shared rate-limit store.
+- [src/sentinel/application/ports/rate_limiter.py](../src/sentinel/application/ports/rate_limiter.py): storage protocol for atomic check-and-record operations.
+- [src/sentinel/infrastructure/persistence/postgres/rate_limiter.py](../src/sentinel/infrastructure/persistence/postgres/rate_limiter.py): hashed-key PostgreSQL sliding-window storage with transaction-level bucket locking and expiry cleanup.
 - [src/sentinel/main.py](../src/sentinel/main.py): use the same selected persistence bundle in the CLI and a PostgreSQL-compatible selector loop, preserving its existing incident-creation output.
 - [tests/unit/test_main.py](../tests/unit/test_main.py): isolate CLI persistence on temporary SQLite storage and verify PostgreSQL factory/lifecycle wiring without network access.
 - [tests/unit/config/test_settings.py](../tests/unit/config/test_settings.py): verify database environment values and secret-safe Settings representation.

@@ -17,6 +17,7 @@ from fastapi.security import APIKeyHeader
 from psycopg import Error as PostgreSQLError
 from pydantic import BaseModel, Field
 
+from sentinel.application.ports.rate_limiter import RateLimitStore
 from sentinel.application.use_cases.create_incident import (
     CreateIncidentCommand,
     CreateIncidentUseCase,
@@ -34,6 +35,9 @@ from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
 from sentinel.infrastructure.logging_config import configure_logging
 from sentinel.infrastructure.middleware import RequestIDMiddleware
+from sentinel.infrastructure.persistence.postgres.rate_limiter import (
+    PostgreSQLRateLimitStore,
+)
 
 logger = logging.getLogger("sentinel.api")
 
@@ -44,19 +48,19 @@ class CreateIncidentRequest(BaseModel):
 
 
 class InMemoryRateLimiter:
-    """Limit requests per API key and endpoint."""
+    """Single-process sliding-window store for explicitly configured SQLite use."""
 
     def __init__(self) -> None:
         self._requests: dict[tuple[str, str], deque[float]] = {}
         self._lock = Lock()
 
-    async def check(
+    async def check_and_record(
         self,
         api_key: str,
         endpoint: str,
         max_requests: int,
         window_seconds: int = 60,
-    ) -> None:
+    ) -> int | None:
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         bucket_key = (key_hash, endpoint)
 
@@ -71,17 +75,30 @@ class InMemoryRateLimiter:
                 timestamps.popleft()
 
             if len(timestamps) >= max_requests:
-                retry_after = max(
+                return max(
                     1,
                     int(window_seconds - (now - timestamps[0])),
                 )
-                raise HTTPException(
-                    status_code=429,
-                    detail="Rate limit exceeded. Try again later.",
-                    headers={"Retry-After": str(retry_after)},
-                )
 
             timestamps.append(now)
+            return None
+
+    async def check(
+        self,
+        api_key: str,
+        endpoint: str,
+        max_requests: int,
+        window_seconds: int = 60,
+    ) -> None:
+        retry_after = await self.check_and_record(
+            api_key, endpoint, max_requests, window_seconds
+        )
+        if retry_after is not None:
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Try again later.",
+                headers={"Retry-After": str(retry_after)},
+            )
 
 
 class RateLimitDependency:
@@ -112,14 +129,20 @@ class RateLimitDependency:
         route = request.scope.get("route")
         endpoint = getattr(route, "path", request.url.path)
 
-        limiter: InMemoryRateLimiter = request.app.state.rate_limiter
+        limiter: RateLimitStore = request.app.state.rate_limiter
 
-        await limiter.check(
+        retry_after = await limiter.check_and_record(
             api_key=api_key,
             endpoint=f"{request.method}:{endpoint}",
             max_requests=self._max_requests,
             window_seconds=self._window_seconds,
         )
+        if retry_after is not None:
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Try again later.",
+                headers={"Retry-After": str(retry_after)},
+            )
 
 
 api_key_header = APIKeyHeader(
@@ -183,7 +206,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         app.state.incident_repository = persistence.incidents
         app.state.create_incident = CreateIncidentUseCase(persistence.incidents)
         app.state.investigation_service = investigation_service
-        app.state.rate_limiter = InMemoryRateLimiter()
+        if isinstance(persistence.database, PostgreSQLDatabase):
+            app.state.rate_limiter = PostgreSQLRateLimitStore(persistence.database)
+        elif isinstance(persistence.database, SQLiteDatabase):
+            app.state.rate_limiter = InMemoryRateLimiter()
+        else:
+            raise TypeError("Unsupported database for rate limiting.")
         yield
 
 

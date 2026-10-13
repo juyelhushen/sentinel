@@ -9,6 +9,10 @@ from psycopg import OperationalError
 
 from sentinel import api
 from sentinel.config.settings import Settings
+from sentinel.infrastructure.database.postgres import (
+    DatabaseUnavailable,
+    PostgreSQLDatabase,
+)
 from sentinel.llm.models import LLMResponse
 
 
@@ -103,6 +107,28 @@ async def test_api_database_errors_do_not_expose_connection_details(
         assert "private-host" not in result.text
 
 
+async def test_rate_limit_storage_failure_fails_closed(configured_api) -> None:
+    async with (
+        api.lifespan(configured_api),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=configured_api), base_url="http://test"
+        ) as client,
+    ):
+        limiter = Mock()
+        limiter.check_and_record = AsyncMock(
+            side_effect=DatabaseUnavailable("Rate limiting is temporarily unavailable.")
+        )
+        configured_api.state.rate_limiter = limiter
+
+        result = await client.get(
+            "/health/ollama", headers={"X-API-Key": "unit-test-api-key"}
+        )
+
+    assert result.status_code == 503
+    assert result.json() == {"detail": "Database unavailable. Try again later."}
+    limiter.check_and_record.assert_awaited_once()
+
+
 async def test_api_lifespan_builds_postgres_dsn_from_render_settings(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -126,7 +152,7 @@ async def test_api_lifespan_builds_postgres_dsn_from_render_settings(
         received.update(options)
         yield SimpleNamespace(
             incidents=repository,
-            database=Mock(),
+            database=PostgreSQLDatabase(database_url),
         )
 
     monkeypatch.setattr(api, "get_settings", lambda: settings)

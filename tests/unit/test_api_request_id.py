@@ -3,13 +3,14 @@ from uuid import UUID
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from sentinel.api import request_id_context, request_id_middleware
+from sentinel.infrastructure.middleware import RequestIDMiddleware
+from sentinel.infrastructure.request_context import request_id_context
 
 
 def create_test_app() -> FastAPI:
-    """Create a lightweight app using Sentinel's request ID middleware."""
+    """Create a lightweight app using the request ID middleware."""
     test_app = FastAPI()
-    test_app.middleware("http")(request_id_middleware)
+    test_app.add_middleware(RequestIDMiddleware)
 
     @test_app.get("/health")
     async def health() -> dict[str, str]:
@@ -30,7 +31,6 @@ def test_generates_request_id_when_header_is_missing() -> None:
         response = client.get("/health")
 
     assert response.status_code == 200
-
     request_id = response.headers["X-Request-ID"]
     assert str(UUID(request_id)) == request_id
 
@@ -56,7 +56,6 @@ def test_replaces_invalid_request_id() -> None:
         )
 
     assert response.status_code == 200
-
     request_id = response.headers["X-Request-ID"]
     assert str(UUID(request_id)) == request_id
     assert request_id != "invalid-id"
@@ -67,7 +66,6 @@ def test_request_id_is_available_in_request_context() -> None:
         response = client.get("/request-context")
 
     assert response.status_code == 200
-
     body = response.json()
     assert body["request_id"] == response.headers["X-Request-ID"]
     assert body["context_id"] == body["request_id"]

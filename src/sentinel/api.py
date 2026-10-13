@@ -7,9 +7,9 @@ from collections import deque
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from time import monotonic, perf_counter
+from time import monotonic
 from typing import Annotated, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -33,7 +33,7 @@ from sentinel.infrastructure.database.postgres import (
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
 from sentinel.infrastructure.logging_config import configure_logging
-from sentinel.infrastructure.request_context import request_id_context
+from sentinel.infrastructure.middleware import RequestIDMiddleware
 
 logger = logging.getLogger("sentinel.api")
 
@@ -196,57 +196,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-@app.middleware("http")
-async def request_id_middleware(
-    request: Request,
-    call_next: Any,
-):
-    incoming_request_id = request.headers.get("X-Request-ID")
-
-    try:
-        request_id = (
-            str(UUID(incoming_request_id)) if incoming_request_id else str(uuid4())
-        )
-    except ValueError:
-        request_id = str(uuid4())
-
-    request.state.request_id = request_id
-    token = request_id_context.set(request_id)
-    start_time = perf_counter()
-
-    try:
-        response = await call_next(request)
-
-        duration_ms = round((perf_counter() - start_time) * 1000, 2)
-
-        logger.info(
-            "HTTP request completed",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": duration_ms,
-            },
-        )
-
-        response.headers["X-Request-ID"] = request_id
-        return response
-
-    except Exception:
-        logger.exception(
-            "Unhandled exception during HTTP request",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-            },
-        )
-        raise
-
-    finally:
-        request_id_context.reset(token)
+app.add_middleware(RequestIDMiddleware)
 
 
 @app.exception_handler(DatabaseUnavailable)

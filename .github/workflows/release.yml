@@ -1,0 +1,70 @@
+name: Sentinel Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sentinel-release-deployment
+  cancel-in-progress: false
+
+jobs:
+  quality-and-deploy:
+    name: Quality Checks and Render Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Check formatting
+        run: uv run ruff format --check src tests
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Type check
+        run: uv run mypy src
+
+      - name: Run tests
+        run: uv run pytest -q -m "not integration"
+
+      - name: Trigger Render deployment
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [[ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL secret is not configured."
+            exit 1
+          fi
+
+          separator='?'
+          if [[ "$RENDER_DEPLOY_HOOK_URL" == *\?* ]]; then
+            separator='&'
+          fi
+          deploy_url="${RENDER_DEPLOY_HOOK_URL}${separator}ref=${GITHUB_SHA}"
+
+          if ! curl --fail --silent --max-time 30 --output /dev/null \
+            --request POST "$deploy_url"; then
+            echo "::error::Render deployment trigger failed or timed out."
+            exit 1
+          fi

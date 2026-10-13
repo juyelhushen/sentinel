@@ -35,7 +35,6 @@ from sentinel.infrastructure.dependencies.llm import create_llm_provider
 from sentinel.infrastructure.logging_config import configure_logging
 from sentinel.infrastructure.request_context import request_id_context
 
-
 logger = logging.getLogger("sentinel.api")
 
 

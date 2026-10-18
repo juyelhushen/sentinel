@@ -9,6 +9,12 @@ from sentinel.infrastructure.request_context import request_id_context
 logger = logging.getLogger("sentinel.api")
 
 
+class SanitizedUnhandledError(RuntimeError):
+    def __init__(self, original_exception_type: str) -> None:
+        super().__init__("Unhandled API exception.")
+        self.original_exception_type = original_exception_type
+
+
 class RequestIDMiddleware:
     """Attach request IDs and log HTTP request outcomes."""
 
@@ -44,7 +50,11 @@ class RequestIDMiddleware:
 
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                response_headers = list(message.get("headers", []))
+                response_headers = [
+                    (key, value)
+                    for key, value in message.get("headers", [])
+                    if key.lower() != b"x-request-id"
+                ]
                 response_headers.append((b"x-request-id", request_id.encode("ascii")))
                 message["headers"] = response_headers
 
@@ -52,16 +62,8 @@ class RequestIDMiddleware:
 
         try:
             await self.app(scope, receive, send_with_request_id)
-        except Exception:
-            logger.exception(
-                "Unhandled exception during HTTP request",
-                extra={
-                    "request_id": request_id,
-                    "method": scope.get("method"),
-                    "path": scope.get("path"),
-                },
-            )
-            raise
+        except Exception as exc:  # noqa: BLE001
+            raise SanitizedUnhandledError(type(exc).__name__) from None
         finally:
             logger.info(
                 "HTTP request completed",

@@ -184,5 +184,8 @@ uv run mypy src
 uv run pytest
 ```
 
+For the deterministic autonomous-repair evaluation scenarios, coverage map,
+pass criteria, and measurement guidance, see [the evaluation baseline](docs/evaluation.md).
+
 The full suite also includes existing live Ollama tests; those require the
 configured provider. The existing CI selection is `uv run pytest -q -m 'not integration'`.

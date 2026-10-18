@@ -4,6 +4,12 @@ from uuid import UUID, uuid4
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from sentinel.infrastructure.metrics import (
+    METRICS_PATH,
+    HTTPMetrics,
+    normalize_method,
+    route_template,
+)
 from sentinel.infrastructure.request_context import request_id_context
 
 logger = logging.getLogger("sentinel.api")
@@ -18,8 +24,9 @@ class SanitizedUnhandledError(RuntimeError):
 class RequestIDMiddleware:
     """Attach request IDs and log HTTP request outcomes."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, metrics: HTTPMetrics | None = None) -> None:
         self.app = app
+        self.metrics = metrics
 
     async def __call__(
         self,
@@ -44,6 +51,11 @@ class RequestIDMiddleware:
 
         start_time = perf_counter()
         status_code = 500
+        method = normalize_method(scope.get("method", "OTHER"))
+        record_metrics = self.metrics is not None and scope.get("path") != METRICS_PATH
+        if record_metrics:
+            assert self.metrics is not None
+            self.metrics.start_request()
 
         async def send_with_request_id(message: Message) -> None:
             nonlocal status_code
@@ -65,6 +77,15 @@ class RequestIDMiddleware:
         except Exception as exc:  # noqa: BLE001
             raise SanitizedUnhandledError(type(exc).__name__) from None
         finally:
+            duration_seconds = perf_counter() - start_time
+            if record_metrics:
+                assert self.metrics is not None
+                self.metrics.finish_request(
+                    method=method,
+                    route=route_template(scope),
+                    status_code=status_code,
+                    duration_seconds=duration_seconds,
+                )
             logger.info(
                 "HTTP request completed",
                 extra={
@@ -72,10 +93,7 @@ class RequestIDMiddleware:
                     "method": scope.get("method"),
                     "path": scope.get("path"),
                     "status_code": status_code,
-                    "duration_ms": round(
-                        (perf_counter() - start_time) * 1000,
-                        2,
-                    ),
+                    "duration_ms": round(duration_seconds * 1000, 2),
                 },
             )
             request_id_context.reset(token)

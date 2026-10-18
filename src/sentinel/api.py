@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 from psycopg import Error as PostgreSQLError
 from pydantic import BaseModel, Field
@@ -36,6 +36,7 @@ from sentinel.infrastructure.database.postgres import (
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
 from sentinel.infrastructure.logging_config import configure_logging
+from sentinel.infrastructure.metrics import HTTPMetrics, METRICS_PATH
 from sentinel.infrastructure.middleware import (
     RequestIDMiddleware,
     SanitizedUnhandledError,
@@ -46,6 +47,7 @@ from sentinel.infrastructure.persistence.postgres.rate_limiter import (
 from sentinel.infrastructure.request_context import request_id_context
 
 logger = logging.getLogger("sentinel.api")
+http_metrics = HTTPMetrics()
 
 
 class CreateIncidentRequest(BaseModel):
@@ -372,8 +374,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(RequestIDMiddleware)
+app.add_middleware(RequestIDMiddleware, metrics=http_metrics)
 register_api_error_handlers(app)
+app.state.http_metrics = http_metrics
+
+
+@app.get(
+    METRICS_PATH,
+    response_class=PlainTextResponse,
+    dependencies=[Depends(require_api_key)],
+    responses=API_ERROR_RESPONSES,
+)
+async def metrics(request: Request) -> PlainTextResponse:
+    """Expose process-local Prometheus metrics; requires the configured API key."""
+    return PlainTextResponse(
+        request.app.state.http_metrics.render(),
+        media_type="text/plain; version=0.0.4",
+    )
 
 
 @app.get("/health")

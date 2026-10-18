@@ -189,5 +189,15 @@ Run the deterministic autonomous-repair evaluation with
 Markdown reports under `data/evaluation-reports/`; see [the evaluation baseline](docs/evaluation.md)
 for scenario criteria and measurement semantics.
 
+### Portfolio Demo
+
+For a technically grounded walkthrough of the local API, deterministic repair
+evaluation, safety boundaries, and Render deployment path, see
+[the Sentinel portfolio demo](docs/demo.md). The deterministic fixture uses a
+mocked provider and temporary data; it demonstrates investigation, patch
+validation/application, verification-driven retry, and persistence without
+claiming general LLM accuracy. The public API accepts incidents and starts
+investigations but does not expose patch application or human approval.
+
 The full suite also includes existing live Ollama tests; those require the
 configured provider. The existing CI selection is `uv run pytest -q -m 'not integration'`.

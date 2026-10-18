@@ -6,6 +6,144 @@ path demonstrates authenticated incident intake and investigation status; it
 does not expose repair execution. No production endpoint is called by this
 guide.
 
+## Five-Minute Interview Walkthrough
+
+This is an approximate talk track; local LLM latency varies. Prepare the local
+environment before starting the five-minute timer. Do not call the Render URL
+for write operations.
+
+### Before the Timer
+
+If `.env` does not exist, copy `.env.example` to `.env`; otherwise preserve your
+existing local file. Add a local-only `SENTINEL_API_KEY` and configure an Ollama
+model that is already available locally. Do not put the key in shell commands,
+screen captures, or the repository. In a PowerShell window from the repository
+root, create a disposable repository and start the API against it and a separate
+SQLite database:
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+notepad .env
+$demoRoot = Join-Path $env:TEMP "sentinel-recruiter-demo"
+New-Item -ItemType Directory -Force (Join-Path $demoRoot "tests") | Out-Null
+@'
+def add(a: int, b: int) -> int:
+    return a - b
+'@ | Set-Content -Path (Join-Path $demoRoot "calculator.py") -Encoding utf8
+@'
+from calculator import add
+
+def test_add():
+    assert add(2, 3) == 5
+'@ | Set-Content -Path (Join-Path $demoRoot "tests/test_calculator.py") -Encoding utf8
+$env:DATABASE_BACKEND = "sqlite"
+$env:DATABASE_URL = "sqlite:///./data/sentinel-interview-demo.db"
+$env:SENTINEL_REPOSITORY_ROOT = $demoRoot
+uv sync --locked --dev
+uv run uvicorn sentinel.api:app --host 127.0.0.1 --port 8000
+```
+
+Keep this server window open and use a second PowerShell window at the repository
+root for the timed client commands. This fixture is disposable and local; the
+API's repair path remains disabled. The API still uses the configured local
+Ollama provider for planning.
+
+### 0:00-0:45 - Problem and Architecture
+
+**Say:** "Sentinel turns a software incident into a structured, auditable
+investigation. FastAPI accepts the incident, LangGraph coordinates a planner
+and investigator, and a controlled tool gateway reads and tests an authorized
+workspace. A separate internal workflow can propose constrained patches and
+verify them, but the deployed API does not expose repair."
+
+Point to the architecture diagram above. Distinguish the HTTP investigation path
+from the repair-enabled deterministic test workflow.
+
+### 0:45-1:45 - Public API
+
+In a second PowerShell window from the repository root, load the key from the
+ignored `.env` without printing it, then create and investigate a local sample
+incident:
+
+```powershell
+$keyLine = Get-Content .env | Where-Object { $_ -match '^SENTINEL_API_KEY=' } | Select-Object -First 1
+if (-not $keyLine) { throw "Set SENTINEL_API_KEY in the ignored .env file first." }
+$apiKey = $keyLine.Substring($keyLine.IndexOf('=') + 1).Trim().Trim('"').Trim("'")
+$headers = @{ "X-API-Key" = $apiKey }
+$baseUrl = "http://127.0.0.1:8000"
+$body = @{ title = "Calculator addition test fails"; description = "The add function returns subtraction results." } | ConvertTo-Json
+$created = Invoke-WebRequest -Method Post -Uri "$baseUrl/incidents" -Headers $headers -ContentType "application/json" -Body $body
+$created.Headers["X-Request-ID"]
+$created.Content | ConvertFrom-Json
+$incident = $created.Content | ConvertFrom-Json
+$investigated = Invoke-WebRequest -Method Post -Uri "$baseUrl/incidents/$($incident.id)/investigate" -Headers $headers
+$investigated.Headers["X-Request-ID"]
+$investigated.Content | ConvertFrom-Json
+```
+
+The create response contains `id`, `title`, `description`, `repository`,
+`status`, and `created_at`. The investigation response contains `incident_id`,
+`incident_status`, `execution_id`, `execution_status`, and `error`. The
+investigation endpoint accepts no request body and does not return findings.
+The planner is live Ollama here, so the result and timing can vary. If Ollama
+is unavailable or the request does not complete, do not claim a successful
+live investigation; continue with the deterministic evaluation.
+
+### 1:45-3:15 - Deterministic Repair Evaluation
+
+From the repository root, run:
+
+```powershell
+uv run python scripts/run_evaluation.py
+```
+
+It runs six existing scenarios: investigation facts, successful repair,
+invalid-proposal rejection, verification retry, retry exhaustion, and approval
+rejection. Point out the printed JSON/Markdown report paths and pass/fail totals;
+open the files under `data/evaluation-reports/` to inspect scenario IDs,
+expected/actual outcomes, durations, retry counts where available, and safe
+error categories. The fixture uses mocked provider responses, temporary files,
+and isolated SQLite, not Ollama. Its calculator facts and six outcomes are
+deterministic examples, not generalized model accuracy.
+
+The internal workflow validates repair paths and diff context when applying a
+patch, runs configured tests, and records attempts. Failed verification can
+retry within policy. The default gate is automatic approval, not human review.
+The API does not offer this repair operation.
+
+### 3:15-4:15 - Production Engineering
+
+Show the local health and metrics routes (do not substitute the deployed
+origin):
+
+```powershell
+Invoke-RestMethod "$baseUrl/health"
+Invoke-RestMethod "$baseUrl/health/ready"
+Invoke-RestMethod "$baseUrl/health/ollama" -Headers $headers
+(Invoke-WebRequest "$baseUrl/metrics" -Headers $headers).StatusCode
+```
+
+Explain that `/health` is shallow, `/health/ready` checks the database, and
+`/health/ollama` requires the API key and is rate limited. `/metrics` is also
+authenticated but not rate limited; its metrics are process-local. SQLite is
+the local default; PostgreSQL is optional. CI runs formatting, lint, MyPy, and
+the non-integration test selection; the release workflow triggers Render for
+`v*` tags. A healthy endpoint is not proof of a successful investigation or
+repair. Do not claim authenticated health of the deployed Ollama provider
+unless it has separately been checked with authorized credentials.
+
+### 4:15-5:00 - Limitations and Close
+
+**Say:** "The public service currently investigates and reports execution
+status; patching is an internal capability covered by deterministic tests. The
+default approval gate is automatic, verification uses local pytest rather than
+a hosted sandbox, and the fixture does not measure general LLM accuracy. The
+next engineering step would be an explicit review and isolation boundary before
+exposing repair as a user-facing operation."
+
+Stop here without sending requests to production. The detailed setup and
+troubleshooting notes remain in the sections below.
+
 ## Architecture at a Glance
 
 - **FastAPI (`sentinel.api`)** validates and stores incident requests, protects

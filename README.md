@@ -110,7 +110,7 @@ The public API starts an investigation and returns incident/execution status. It
 flowchart TD
     A["Internal Caller Enables Repair"] --> B["Generate Repair Plan"]
     B --> C["Automatic Approval Gate<br/>or injected policy gate"]
-    C -- Rejected --> H["Record Rejected Attempt"]
+    C -- Rejected --> H["Record Repair Attempt"]
     H --> I["Fail Execution"]
     C -- Approved --> D["Apply Patch Tool<br/>Validate repository path and diff"]
     D -- Application error --> H

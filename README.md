@@ -14,37 +14,55 @@ Sentinel is a Python-based engineering incident assistant built with FastAPI, La
 
 ```mermaid
 flowchart TB
-    User["Developer / Client"]
-    API["FastAPI<br/>Authenticated REST API"]
-    Auth["API Key Auth<br/>Rate Limiting"]
-    Graph["LangGraph<br/>Investigation Workflow"]
-    Planner["Planner Agent<br/>Ollama"]
+    Client["Developer / Client"]
+    API["FastAPI"]
+    CreateRoute["POST /incidents<br/>API key + rate limit"]
+    Create["Create Incident Use Case"]
+    InvestigateRoute["POST /incidents/{id}/investigate<br/>API key + rate limit"]
+    Investigate["Investigation Service<br/>Repair disabled in API"]
+    ReadyRoute["GET /health/ready<br/>public"]
+    OllamaRoute["GET /health/ollama<br/>API key + rate limit"]
+    MetricsRoute["GET /metrics<br/>API key"]
+    Graph["LangGraph Investigation Workflow"]
+    Planner["Planner Agent"]
     Investigator["Investigator Agent"]
-    Gateway["Controlled Tool Gateway"]
-    Tools["Repository Tools<br/>File · Search · Tests"]
-    Store["Persistence Layer<br/>SQLite / PostgreSQL"]
-    Ops["Operations<br/>Request IDs · JSON Logs<br/>API Errors · Prometheus Metrics"]
+    Ollama["Ollama"]
+    Gateway["Local Tool Gateway"]
+    Tools["Repository Tools<br/>Read · Search · Tests"]
+    Store["SQLite / PostgreSQL"]
+    Metrics["Process-local Metrics"]
+    Operations["Request IDs · JSON Logs<br/>Standardized Errors"]
 
-    User --> API
-    API --> Auth
-    Auth --> Graph
+    Client --> API
+    API --> CreateRoute
+    CreateRoute --> Create
+    Create --> Store
+    API --> InvestigateRoute
+    InvestigateRoute --> Investigate
+    Investigate --> Graph
     Graph --> Planner
-    Planner --> Investigator
+    Planner --> Ollama
+    Graph --> Investigator
     Investigator --> Gateway
     Gateway --> Tools
     Graph --> Store
-    API -.-> Ops
-    Graph -.-> Store
+    API --> ReadyRoute
+    ReadyRoute --> Store
+    API --> OllamaRoute
+    OllamaRoute --> Ollama
+    API --> MetricsRoute
+    MetricsRoute --> Metrics
+    API -.-> Operations
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#172554
     classDef agent fill:#ede9fe,stroke:#7c3aed,color:#2e1065
     classDef infra fill:#dcfce7,stroke:#16a34a,color:#14532d
     classDef ops fill:#fef3c7,stroke:#d97706,color:#78350f
 
-    class User,API,Auth entry
+    class Client,API,CreateRoute,Create,InvestigateRoute,Investigate entry
     class Graph,Planner,Investigator agent
-    class Gateway,Tools,Store infra
-    class Ops ops
+    class Gateway,Tools,Store,Ollama infra
+    class Metrics,Operations ops
 ```
 
 ### Core components
@@ -91,26 +109,28 @@ The public API starts an investigation and returns incident/execution status. It
 ```mermaid
 flowchart TD
     A["Internal Caller Enables Repair"] --> B["Generate Repair Plan"]
-    B --> C["Validate Plan & Patch Paths"]
-    C --> D["Approval Gate"]
-    D --> E["Apply Context-Checked Patch"]
-    E --> F["Run Configured Tests"]
+    B --> C["Automatic Approval Gate<br/>or injected policy gate"]
+    C -- Rejected --> H["Record Rejected Attempt"]
+    H --> I["Fail Execution"]
+    C -- Approved --> D["Apply Patch Tool<br/>Validate repository path and diff"]
+    D -- Application error --> H
+    D -- Applied --> E["Run Configured Tests"]
+    E --> F["Record Attempt"]
     F --> G{"Verification Passed?"}
-    G -- Yes --> H["Record Successful Outcome"]
-    G -- No --> I{"Retry Budget Remaining?"}
-    I -- Yes --> J["Revise Repair Attempt"]
-    J --> C
-    I -- No --> K["Record Failed Outcome"]
+    G -- Yes --> J["Complete Execution"]
+    G -- No --> K{"Retry Budget Remaining?"}
+    K -- Yes --> B
+    K -- No --> L["Fail Execution"]
 
     classDef action fill:#dbeafe,stroke:#2563eb,color:#172554
     classDef decision fill:#fef3c7,stroke:#d97706,color:#78350f
     classDef success fill:#dcfce7,stroke:#16a34a,color:#14532d
     classDef failure fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
 
-    class A,B,C,D,E,F,J action
-    class G,I decision
-    class H success
-    class K failure
+    class A,B,C,D,E,F,H action
+    class G,K decision
+    class J success
+    class I,L failure
 ```
 
 This workflow is an **internal capability**, not a public repair endpoint.

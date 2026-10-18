@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from sentinel.infrastructure.metrics import (
-    HTTPMetrics,
     METRICS_PATH,
+    HTTPMetrics,
     normalize_method,
     route_template,
 )

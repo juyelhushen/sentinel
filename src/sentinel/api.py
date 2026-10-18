@@ -36,7 +36,7 @@ from sentinel.infrastructure.database.postgres import (
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
 from sentinel.infrastructure.logging_config import configure_logging
-from sentinel.infrastructure.metrics import HTTPMetrics, METRICS_PATH
+from sentinel.infrastructure.metrics import METRICS_PATH, HTTPMetrics
 from sentinel.infrastructure.middleware import (
     RequestIDMiddleware,
     SanitizedUnhandledError,

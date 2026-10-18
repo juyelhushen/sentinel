@@ -4,18 +4,20 @@ import logging
 import secrets
 from asyncio import Lock
 from collections import deque
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 from time import monotonic
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from psycopg import Error as PostgreSQLError
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from sentinel.application.ports.rate_limiter import RateLimitStore
 from sentinel.application.use_cases.create_incident import (
@@ -34,10 +36,14 @@ from sentinel.infrastructure.database.postgres import (
 from sentinel.infrastructure.database.sqlite import SQLiteDatabase
 from sentinel.infrastructure.dependencies.llm import create_llm_provider
 from sentinel.infrastructure.logging_config import configure_logging
-from sentinel.infrastructure.middleware import RequestIDMiddleware
+from sentinel.infrastructure.middleware import (
+    RequestIDMiddleware,
+    SanitizedUnhandledError,
+)
 from sentinel.infrastructure.persistence.postgres.rate_limiter import (
     PostgreSQLRateLimitStore,
 )
+from sentinel.infrastructure.request_context import request_id_context
 
 logger = logging.getLogger("sentinel.api")
 
@@ -45,6 +51,148 @@ logger = logging.getLogger("sentinel.api")
 class CreateIncidentRequest(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     description: str = Field(min_length=5, max_length=5000)
+
+
+class APIErrorDetail(BaseModel):
+    code: str
+    message: str
+    request_id: str
+
+
+class APIErrorResponse(BaseModel):
+    error: APIErrorDetail
+
+
+API_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    code: {"model": APIErrorResponse, "description": description}
+    for code, description in (
+        (401, "Authentication failed."),
+        (404, "The requested resource was not found."),
+        (422, "Request validation failed."),
+        (429, "Rate limit exceeded."),
+        (500, "An unexpected server error occurred."),
+        (503, "A required service is unavailable."),
+    )
+}
+
+
+def _request_id(request: Request) -> str:
+    request_id = getattr(request.state, "request_id", None)
+    if not request_id or request_id == "-":
+        request_id = request_id_context.get()
+    if not request_id or request_id == "-":
+        request_id = str(uuid4())
+    request.state.request_id = request_id
+    return request_id
+
+
+def _error_response(
+    request: Request,
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
+    request_id = _request_id(request)
+    response_headers = {
+        key: value
+        for key, value in (headers or {}).items()
+        if key.lower() != "x-request-id"
+    }
+    response_headers["X-Request-ID"] = request_id
+    body = APIErrorResponse(
+        error=APIErrorDetail(code=code, message=message, request_id=request_id)
+    )
+    return JSONResponse(
+        status_code=status_code,
+        content=body.model_dump(mode="json"),
+        headers=response_headers,
+    )
+
+
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, StarletteHTTPException):
+        raise TypeError("Expected a Starlette HTTP exception.")
+    safe_errors = {
+        400: ("BAD_REQUEST", "The request could not be processed."),
+        401: ("AUTHENTICATION_FAILED", "Authentication failed."),
+        403: ("FORBIDDEN", "Access to this resource is forbidden."),
+        404: ("NOT_FOUND", "The requested resource was not found."),
+        422: ("VALIDATION_ERROR", "Request validation failed."),
+        429: ("RATE_LIMIT_EXCEEDED", "Rate limit exceeded. Try again later."),
+        503: ("SERVICE_UNAVAILABLE", "Service temporarily unavailable."),
+    }
+    code, message = safe_errors.get(
+        exc.status_code,
+        ("HTTP_ERROR", "The request could not be completed."),
+    )
+    if exc.status_code >= 500:
+        code, message = "INTERNAL_SERVER_ERROR", "An internal server error occurred."
+    return _error_response(
+        request,
+        status_code=exc.status_code,
+        code=code,
+        message=message,
+        headers=exc.headers,
+    )
+
+
+async def validation_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    if not isinstance(exc, RequestValidationError):
+        raise TypeError("Expected a request validation error.")
+    return _error_response(
+        request,
+        status_code=422,
+        code="VALIDATION_ERROR",
+        message="Request validation failed.",
+    )
+
+
+async def database_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    return _error_response(
+        request,
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        code="DATABASE_UNAVAILABLE",
+        message="Database unavailable. Try again later.",
+    )
+
+
+async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = _request_id(request)
+    exception_type = (
+        exc.original_exception_type
+        if isinstance(exc, SanitizedUnhandledError)
+        else type(exc).__name__
+    )
+    logger.error(
+        "Unhandled API exception",
+        extra={
+            "exception_type": exception_type,
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+        },
+    )
+    return _error_response(
+        request,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        code="INTERNAL_SERVER_ERROR",
+        message="An unexpected server error occurred.",
+    )
+
+
+def register_api_error_handlers(application: FastAPI) -> None:
+    application.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    application.add_exception_handler(
+        RequestValidationError, validation_exception_handler
+    )
+    application.add_exception_handler(DatabaseUnavailable, database_error_handler)
+    application.add_exception_handler(PostgreSQLError, database_error_handler)
+    application.add_exception_handler(Exception, unexpected_error_handler)
 
 
 class InMemoryRateLimiter:
@@ -225,15 +373,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestIDMiddleware)
-
-
-@app.exception_handler(DatabaseUnavailable)
-@app.exception_handler(PostgreSQLError)
-async def database_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"detail": "Database unavailable. Try again later."},
-    )
+register_api_error_handlers(app)
 
 
 @app.get("/health")
@@ -252,6 +392,7 @@ async def health(
         Depends(require_api_key),
         Depends(RateLimitDependency(max_requests=10)),
     ],
+    responses=API_ERROR_RESPONSES,
 )
 async def ollama_health(request: Request) -> dict[str, str]:
     provider = request.app.state.llm_provider
@@ -268,6 +409,7 @@ async def ollama_health(request: Request) -> dict[str, str]:
 @app.post(
     "/incidents",
     status_code=status.HTTP_201_CREATED,
+    responses=API_ERROR_RESPONSES,
     dependencies=[
         Depends(require_api_key),
         Depends(RateLimitDependency(max_requests=10)),
@@ -299,6 +441,7 @@ async def create_incident(
 
 @app.post(
     "/incidents/{incident_id}/investigate",
+    responses=API_ERROR_RESPONSES,
     dependencies=[
         Depends(require_api_key),
         Depends(RateLimitDependency(max_requests=10)),
@@ -328,7 +471,7 @@ async def investigate_incident(
     }
 
 
-@app.get("/health/ready")
+@app.get("/health/ready", responses=API_ERROR_RESPONSES)
 async def readiness(request: Request) -> dict[str, str]:
     """Check whether Sentinel can access its database."""
     database = request.app.state.database

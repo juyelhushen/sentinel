@@ -20,10 +20,12 @@ class JsonFormatter(logging.Formatter):
         }
 
         structured_fields = (
+            "request_id",
             "method",
             "path",
             "status_code",
             "duration_ms",
+            "exception_type",
         )
 
         for field in structured_fields:

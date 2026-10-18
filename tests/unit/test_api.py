@@ -102,7 +102,10 @@ async def test_api_database_errors_do_not_expose_connection_details(
             json={"title": "Failure", "description": "Tests failed"},
         )
         assert result.status_code == 503
-        assert result.json() == {"detail": "Database unavailable. Try again later."}
+        assert result.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+        assert result.json()["error"]["message"] == (
+            "Database unavailable. Try again later."
+        )
         assert "secret" not in result.text
         assert "private-host" not in result.text
 
@@ -125,7 +128,10 @@ async def test_rate_limit_storage_failure_fails_closed(configured_api) -> None:
         )
 
     assert result.status_code == 503
-    assert result.json() == {"detail": "Database unavailable. Try again later."}
+    assert result.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+    assert result.json()["error"]["message"] == (
+        "Database unavailable. Try again later."
+    )
     limiter.check_and_record.assert_awaited_once()
 
 

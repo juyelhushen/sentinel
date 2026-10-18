@@ -5,6 +5,8 @@ import pytest
 
 from sentinel.application.ports.repair_approval_gate import RepairApprovalGate
 from sentinel.application.ports.repair_repository import RepairRepository
+from sentinel.application.repair.repair_parser import RepairParsingError
+from sentinel.application.services.investigation_service import InvestigationService
 from sentinel.bootstrap.application import create_sentinel_application
 from sentinel.domain.enums.execution_status import ExecutionStatus
 from sentinel.domain.enums.incident_status import IncidentStatus
@@ -238,6 +240,41 @@ async def test_autonomous_repair_fixes_broken_repository(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_investigation_findings_match_calculator_facts_without_repair(
+    sample_repository: Path,
+) -> None:
+    application = create_sentinel_application(
+        llm_provider=DeterministicLLMProvider([]),
+        repository_root=sample_repository,
+    )
+
+    result = await application.ainvoke({"incident": _incident()})
+
+    findings = {
+        step.action.value: step for step in result["investigation"].step_results
+    }
+    inspection = findings["inspect_file"]
+    test_run = findings["run_tests"]
+    expected_facts = {
+        "implementation_subtracts_instead_of_adding": (
+            inspection.success and "return a - b" in inspection.findings
+        ),
+        "addition_test_reproduces_the_failure": (
+            not test_run.success and "Pytest exited with code 1" in test_run.findings
+        ),
+    }
+
+    assert expected_facts == {
+        "implementation_subtracts_instead_of_adding": True,
+        "addition_test_reproduces_the_failure": True,
+    }
+    assert result["repair_enabled"] is False
+    assert result.get("repair_plan") is None
+    assert result.get("verification") is None
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_autonomous_repair_retries_after_failed_verification(
     sample_repository: Path,
     database: SQLiteDatabase,
@@ -358,6 +395,10 @@ async def test_autonomous_repair_stops_after_retry_limit(
     attempts = await SQLiteRepairRepository(database).get_attempts(
         result["execution"].id
     )
+    persisted_execution = await SQLiteExecutionRepository(database).get_by_id(
+        result["execution"].id
+    )
+    persisted_incident = await SQLiteIncidentRepository(database).get_by_id(incident.id)
 
     assert len(attempts) == 3
     assert len(provider.repair_requests) == 3
@@ -371,6 +412,69 @@ async def test_autonomous_repair_stops_after_retry_limit(
     assert incident.status == IncidentStatus.FAILED
     assert result["error"] is not None
     assert "verification" in result["error"].lower()
+    assert persisted_execution is not None
+    assert persisted_execution.status == ExecutionStatus.FAILED
+    assert persisted_execution.started_at is not None
+    assert persisted_execution.completed_at is not None
+    assert persisted_incident is not None
+    assert persisted_incident.status == IncidentStatus.FAILED
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_invalid_repair_proposal_fails_through_investigation_service(
+    sample_repository: Path,
+    database: SQLiteDatabase,
+) -> None:
+    original = (sample_repository / "calculator.py").read_text(encoding="utf-8")
+    invalid_proposal = {
+        "summary": "Use an unsupported action.",
+        "steps": [
+            {
+                "step_number": "one",
+                "action": "apply_patch",
+                "file_path": "calculator.py",
+                "description": "Replace the implementation.",
+                "patch": (
+                    "--- a/calculator.py\n"
+                    "+++ b/calculator.py\n"
+                    "@@ -2,1 +2,1 @@\n"
+                    "-    return a - b\n"
+                    "+    return a + b\n"
+                ),
+            }
+        ],
+    }
+    graph, provider = _application(
+        sample_repository,
+        database,
+        [invalid_proposal],
+    )
+    incident = _incident()
+    incident_repository = SQLiteIncidentRepository(database)
+    execution_repository = SQLiteExecutionRepository(database)
+    await incident_repository.persist(incident)
+    service = InvestigationService(
+        incident_repository=incident_repository,
+        execution_repository=execution_repository,
+        graph=graph,
+    )
+
+    with pytest.raises(RepairParsingError, match="invalid step_number"):
+        await service.investigate(incident.id)
+
+    persisted_incident = await incident_repository.get_by_id(incident.id)
+    executions = await execution_repository.get_by_incident_id(incident.id)
+    assert len(provider.repair_requests) == 1
+    assert persisted_incident is not None
+    assert persisted_incident.status == IncidentStatus.FAILED
+    assert len(executions) == 1
+    assert executions[0].status == ExecutionStatus.FAILED
+    assert executions[0].started_at is not None
+    assert executions[0].completed_at is not None
+    assert await SQLiteRepairRepository(database).get_attempts(executions[0].id) == []
+    assert "apply_patch" not in await _tool_names(database)
+    assert (sample_repository / "calculator.py").read_text(encoding="utf-8") == original
 
 
 @pytest.mark.integration

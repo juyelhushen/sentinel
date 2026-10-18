@@ -138,14 +138,14 @@ copied automatically.
 See [the PostgreSQL setup guide](docs/postgresql.md) for schema permissions,
 pool sizing, migration safety, and TLS details.
 
-#### API Metrics
+### Monitoring
 
-Sentinel exposes Prometheus text metrics at `/metrics`. The endpoint requires
-the same `X-API-Key` header used by protected API routes; keep the key in a
-secret manager and scrape the endpoint only from a trusted monitoring system.
-Metrics are process-local and are not persisted, so each application instance
-reports its own counters and histogram. See [the API guide](docs/api.md) for
-metric names, labels, and deployment limitations.
+`/health` is a public liveness-style check; `/health/ready` checks database
+access, and `/health/ollama` checks the provider with API-key authentication.
+`/metrics` is a separate, API-key-protected Prometheus endpoint. Metrics are
+process-local, reset on restart, and are not automatically aggregated across
+instances. See [the API monitoring guide](docs/api.md) for metric queries,
+external-scraper guidance, and logging details.
 
 #### Safe PostgreSQL Integration Tests
 

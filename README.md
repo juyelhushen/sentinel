@@ -1,149 +1,300 @@
-# Sentinel
+# 🛡️ Sentinel
 
-Sentinel is a Python engineering-incident assistant that turns an incident
-description into a structured investigation, runs controlled repository tools,
-and records execution outcomes. An optional internal LangGraph path can propose
-and apply a patch, verify it with tests, and retry when verification fails.
+### Autonomous Multi-Agent Engineering Ops Copilot
 
-**Portfolio narrative:** Sentinel accepts an authenticated engineering
-incident, investigates a known failure using repository tools, and records an
-execution trace. In a separate deterministic fixture, it proposes a constrained
-patch, checks it with the repository policy, runs tests, retries a failed
-verification, and persists the outcome. The public API does not expose patch
-application or human approval, and the deterministic fixture is not a claim of
-general LLM accuracy.
+**Turn engineering incidents into structured investigations, auditable executions, and verifiable repair attempts.**
 
-## Architecture
+Sentinel is a Python-based engineering incident assistant built with FastAPI, LangGraph, and Ollama. It investigates incidents through controlled repository tools, records execution outcomes, and includes an optional internal workflow for constrained patching, test verification, and retries.
 
-- **FastAPI API:** incident creation, investigation initiation, health checks,
-  and authenticated Prometheus metrics.
-- **LangGraph workflow:** execution lifecycle, planner and investigator steps,
-  and an optional internal repair/verification retry loop.
-- **Agents:** an Ollama-backed planner creates investigation plans; the
-  investigator maps plan steps to registered tools. The internal repair agent
-  parses a proposed unified diff.
-- **Tool gateway and policy:** controlled file/search/test tools and patch
-  application. Repair paths must stay inside the configured repository; `.git`
-  and selected `.env` files are protected, and patches must match file context.
-- **Persistence:** repository ports have SQLite and PostgreSQL adapters for
-  incidents, executions, tool audits, and repair history.
-- **Operations:** request-ID middleware, structured JSON logs, standardized API
-  errors, endpoint rate limits, and process-local HTTP metrics.
+> **Portfolio scope:** The public API supports incident creation and investigation initiation. Autonomous repair is demonstrated through a separate deterministic test fixture—not through a public patch API or a claim of general LLM accuracy.
 
-### Public API
+---
 
-The FastAPI application exposes an investigation API, not a patch API:
+## 🧭 Architecture at a Glance
 
-| Route | Capability |
-| --- | --- |
-| `POST /incidents` | Create an incident from a title and description. |
-| `POST /incidents/{incident_id}/investigate` | Start an investigation and return incident/execution status. It does not return findings or apply a repair. |
-| `GET /health` | Public shallow liveness-style response. |
-| `GET /health/ready` | Check database connectivity. |
-| `GET /health/ollama` | Authenticated, rate-limited provider health check. |
-| `GET /metrics` | API-key-protected Prometheus text metrics; process-local and not aggregated across instances. |
+```mermaid
+flowchart TB
+    User["Developer / Client"]
+    API["FastAPI<br/>Authenticated REST API"]
+    Auth["API Key Auth<br/>Rate Limiting"]
+    Graph["LangGraph<br/>Investigation Workflow"]
+    Planner["Planner Agent<br/>Ollama"]
+    Investigator["Investigator Agent"]
+    Gateway["Controlled Tool Gateway"]
+    Tools["Repository Tools<br/>File · Search · Tests"]
+    Store["Persistence Layer<br/>SQLite / PostgreSQL"]
+    Ops["Operations<br/>Request IDs · JSON Logs<br/>API Errors · Prometheus Metrics"]
 
-The incident routes and Ollama health check require `X-API-Key` and are
-rate-limited. Standardized errors include a request ID in the JSON body and
-`X-Request-ID` response header.
+    User --> API
+    API --> Auth
+    Auth --> Graph
+    Graph --> Planner
+    Planner --> Investigator
+    Investigator --> Gateway
+    Gateway --> Tools
+    Graph --> Store
+    API -.-> Ops
+    Graph -.-> Store
 
-### Internal Repair Workflow and Safety
+    classDef entry fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef agent fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    classDef infra fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef ops fill:#fef3c7,stroke:#d97706,color:#78350f
 
-The application factory defaults `enable_repair` to `false`, and the FastAPI
-startup path does not enable it. When an internal caller explicitly enables
-repair, the graph can create a repair plan, pass it through a
-`RepairApprovalGate`, apply approved `apply_patch` steps, run the configured
-test path, record attempts, and retry failed verification up to the retry
-policy. If no gate is injected, the graph uses an **automatic approval gate**;
-this is not human-in-the-loop approval. No reviewer UI or public approval route
-is implemented.
+    class User,API,Auth entry
+    class Graph,Planner,Investigator agent
+    class Gateway,Tools,Store infra
+    class Ops ops
+```
 
-The repair policy rejects absolute or repository-escaping paths, `.git`, and
-`.env`, `.env.local`, and `.env.production` files. Unified-diff context must
-match before a file is written. Sentinel does not create a Git branch, commit,
-pull request, or deployment as part of repair.
+### Core components
 
-## Technology
+| Component | Responsibility |
+|---|---|
+| **FastAPI** | Incident creation, investigation initiation, health checks, and authenticated metrics |
+| **LangGraph** | Coordinates investigation execution and the optional internal repair/verification loop |
+| **Planner agent** | Uses Ollama to generate investigation plans |
+| **Investigator agent** | Maps investigation steps to registered tools |
+| **Tool gateway & policy** | Controls repository operations and validates patch paths and context |
+| **Persistence adapters** | Store incidents, executions, tool audits, and repair history |
+| **Operations layer** | Request IDs, structured logs, standardized errors, rate limiting, and HTTP metrics |
 
-- Python 3.14, `uv`, FastAPI, Pydantic Settings, LangGraph, and the Ollama SDK
-- MCP integration and a local tool gateway
-- SQLite by default; optional PostgreSQL through Psycopg 3 and a bounded async
-  connection pool
-- Pytest, Ruff, and MyPy
-- Prometheus-compatible metrics exposition; optional local Prometheus/Grafana
-  files are documented separately
+---
 
-## Persistence and Deployment
+## ⚙️ How Sentinel Works
 
-Local development defaults to SQLite at `data/sentinel.db`. Set
-`DATABASE_BACKEND=postgresql` with the separate `DB_*` settings to select the
-PostgreSQL adapter. SQLite initializes its schema at startup; PostgreSQL uses
-versioned schema migrations. Switching backends does not copy data. Keep
-database passwords and API keys in local ignored configuration or a deployment
-secret manager.
+### 1. Incident investigation
 
-The release workflow is tag-triggered: for `v*` tags it runs formatting, lint,
-type checks, and the non-integration test selection, then posts to the configured
-Render deployment hook. It does not make the public API repair-capable. See
-[`docs/postgresql.md`](docs/postgresql.md) for PostgreSQL/Render configuration
-and persistence safety.
+```mermaid
+flowchart LR
+    A["Incident Description"] --> B["Authenticated API"]
+    B --> C["Create Incident"]
+    C --> D["Start Investigation"]
+    D --> E["Plan Investigation"]
+    E --> F["Execute Controlled Tools"]
+    F --> G["Record Execution Outcome"]
+    G --> H["Persist Audit History"]
 
-## Security and Observability
+    classDef start fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef process fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    classDef finish fill:#dcfce7,stroke:#16a34a,color:#14532d
 
-Protected endpoints use `SENTINEL_API_KEY` with constant-time comparison.
-Request IDs correlate response headers and structured JSON logs; avoid putting
-sensitive incident details in logs because request paths can contain IDs.
-Unexpected API errors are sanitized. `/metrics` requires the API key, is not
-public, and reports only process-local metrics; it resets on process restart and
-is not automatically aggregated across instances. See
-[`docs/api.md`](docs/api.md) for route semantics, metrics, PromQL examples, and
-logging details. The optional local stack and secret handling are in
-[`observability/local/README.md`](observability/local/README.md).
+    class A,B start
+    class C,D,E,F process
+    class G,H finish
+```
 
-## Deterministic Evaluation
+The public API starts an investigation and returns incident/execution status. It does **not** expose investigation findings or patch application.
 
-Run the existing fixed scenarios with:
+### 2. Optional internal repair workflow
+
+```mermaid
+flowchart TD
+    A["Internal Caller Enables Repair"] --> B["Generate Repair Plan"]
+    B --> C["Validate Plan & Patch Paths"]
+    C --> D["Approval Gate"]
+    D --> E["Apply Context-Checked Patch"]
+    E --> F["Run Configured Tests"]
+    F --> G{"Verification Passed?"}
+    G -- Yes --> H["Record Successful Outcome"]
+    G -- No --> I{"Retry Budget Remaining?"}
+    I -- Yes --> J["Revise Repair Attempt"]
+    J --> C
+    I -- No --> K["Record Failed Outcome"]
+
+    classDef action fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef decision fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef success fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef failure fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class A,B,C,D,E,F,J action
+    class G,I decision
+    class H success
+    class K failure
+```
+
+This workflow is an **internal capability**, not a public repair endpoint.
+
+**Safety boundaries**
+
+- Repair is disabled by default in the application factory.
+- The default internal approval gate is automatic—not human-in-the-loop approval.
+- Absolute paths and paths escaping the configured repository are rejected.
+- `.git`, `.env`, `.env.local`, and `.env.production` are protected.
+- Unified-diff context must match before a file is written.
+- Verification failures can trigger retries within the configured policy.
+- Sentinel does not create Git branches, commits, pull requests, or deployments as part of repair.
+
+---
+
+## ✨ Key Capabilities
+
+<details>
+<summary><strong>Incident investigation</strong></summary>
+
+- Authenticated incident creation and investigation initiation.
+- LLM-assisted investigation planning through Ollama.
+- Registered repository tools for controlled investigation.
+- Execution lifecycle tracking and persistence.
+
+</details>
+
+<details>
+<summary><strong>Constrained repair and verification</strong></summary>
+
+- Internal repair planning and unified-diff parsing.
+- Repository path and patch-context validation.
+- Approval-gate integration.
+- Test-based verification and bounded retry handling.
+- Persisted repair-attempt outcomes.
+
+These capabilities are exercised through internal workflows and deterministic tests; they are not exposed as public patch or approval endpoints.
+
+</details>
+
+<details>
+<summary><strong>API operations and observability</strong></summary>
+
+- API-key authentication and endpoint rate limiting.
+- Request IDs in response headers and standardized error bodies.
+- Structured JSON request logs.
+- Sanitized unexpected API errors.
+- Authenticated Prometheus metrics.
+- Database readiness checks.
+
+Metrics are process-local and reset when the process restarts. They are not automatically aggregated across multiple instances.
+
+</details>
+
+---
+
+## 🌐 Public API
+
+The deployed FastAPI application exposes an **investigation API**, not a patch API.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/incidents` | Create an incident from a title and description |
+| `POST` | `/incidents/{incident_id}/investigate` | Start an investigation and return incident/execution status |
+| `GET` | `/health` | Public shallow health response |
+| `GET` | `/health/ready` | Check database connectivity |
+| `GET` | `/health/ollama` | Authenticated provider health check |
+| `GET` | `/metrics` | API-key-protected Prometheus metrics |
+
+The incident routes and Ollama health endpoint require `X-API-Key` and are rate-limited.
+
+Standardized API errors include a stable error code and request ID. The request ID is returned in both the JSON body and the `X-Request-ID` header.
+
+**Interactive API documentation:** [OpenAPI / Swagger UI](https://sentinel-api-6jrt.onrender.com/docs)
+
+---
+
+## 🧰 Technology Stack
+
+| Area | Technologies |
+|---|---|
+| Language & environment | Python 3.14, `uv` |
+| API | FastAPI, Pydantic Settings |
+| Agent orchestration | LangGraph |
+| LLM integration | Ollama SDK |
+| Tool integration | MCP integration and local tool gateway |
+| Persistence | SQLite, PostgreSQL, Psycopg 3 |
+| Testing & quality | Pytest, Ruff, MyPy |
+| Monitoring | Prometheus-compatible metrics |
+
+---
+
+## 💾 Persistence & Deployment
+
+**Persistence**
+- SQLite is the default local backend: `data/sentinel.db`.
+- PostgreSQL is optional and selected with `DATABASE_BACKEND=postgresql` and the corresponding `DB_*` settings.
+- SQLite initializes its schema at startup; PostgreSQL uses versioned schema migrations.
+- Switching database backends does not automatically migrate or copy existing data.
+
+**Deployment**
+- The API is deployed on Render.
+- The release workflow is triggered by version tags matching `v*`.
+- The workflow runs formatting, lint, type checks, and its configured non-integration test selection before invoking the configured Render deployment hook.
+- Deployment does not enable the internal repair workflow.
+
+Keep API keys and database credentials in local ignored configuration or a deployment secret manager. Never commit secrets or use production credentials for a portfolio rehearsal.
+
+---
+
+## 🧪 Deterministic Evaluation
+
+Run the fixed evaluation scenarios locally:
 
 ```powershell
 uv run python scripts/run_evaluation.py
 ```
 
-The runner uses a deterministic mocked provider, a temporary calculator
-repository, local tools, and isolated SQLite. It writes timestamped JSON and
-Markdown reports under the ignored `data/evaluation-reports/` directory. The
-suite covers six specified scenarios; its result is a fixture check, not a
-performance benchmark or general model-accuracy score. Live Ollama planner
-tests are separate and are not part of this runner. See
-[`docs/evaluation.md`](docs/evaluation.md) for scenario criteria and report
-semantics.
+The runner uses a deterministic mocked provider, a temporary calculator repository, local tools, and isolated SQLite. It writes timestamped JSON and Markdown reports to the ignored `data/evaluation-reports/` directory.
 
-## Quick Start
+The six scenarios exercise defined repair and investigation outcomes, including successful repair, verification failure and retry behavior, retry exhaustion, approval rejection, and persistence.
 
-Requirements: Python 3.14, `uv`, and a locally reachable Ollama model for the
-API investigation path. Copy `.env.example` to `.env` (the latter is ignored),
-set a local-only `SENTINEL_API_KEY`, and point `SENTINEL_REPOSITORY_ROOT` at an
-authorized workspace. Do not use production credentials or repositories for a
-portfolio rehearsal.
+**How to interpret the results**
+
+- The runner checks specified behavior against deterministic fixtures.
+- It is not a performance benchmark or a general model-accuracy score.
+- Live Ollama planner tests are separate from this evaluation runner.
+- The generated reports should be inspected rather than treating a passing fixture as proof of production-wide reliability.
+
+---
+
+## 🚀 Quick Start
+
+### Requirements
+
+- Python 3.14
+- [`uv`](https://docs.astral.sh/uv/)
+- [Ollama](https://ollama.com/) with a locally available model for the API investigation path
+
+### 1. Configure the environment
+
+Copy `.env.example` to `.env`, then configure a local-only `SENTINEL_API_KEY` and set `SENTINEL_REPOSITORY_ROOT` to a workspace you are authorized to use.
+
+### 2. Install dependencies
 
 ```powershell
 uv sync --locked --dev
+```
+
+### 3. Start the API
+
+```powershell
 uv run uvicorn sentinel.api:app --host 127.0.0.1 --port 8000
 ```
 
-The API will be available at `http://127.0.0.1:8000`. The deterministic
-evaluation command above does not need the API server or Ollama.
+Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) to explore the API.
 
-## Further Reading
+The deterministic evaluation runner can be run separately and does not require the API server or Ollama.
 
-- [`docs/demo.md`](docs/demo.md): portfolio walkthrough and API-versus-internal
-  workflow boundaries.
-- [`docs/api.md`](docs/api.md): API error contracts, health endpoints, metrics,
-  and request logging.
-- [`docs/evaluation.md`](docs/evaluation.md): deterministic scenarios, results,
-  and limitations.
-- [`docs/postgresql.md`](docs/postgresql.md): PostgreSQL, Neon, Render, schema
-  permissions, and safe database tests.
-- [`observability/local/README.md`](observability/local/README.md): optional
-  local Prometheus/Grafana stack setup.
-- [`docs/ruff-lint-validation.md`](docs/ruff-lint-validation.md): validation
-  history and repository checks.
+---
+
+## 📚 Documentation
+
+| Guide | Details |
+|---|---|
+| [Demo walkthrough](docs/demo.md) | Portfolio walkthrough and public API versus internal workflow boundaries |
+| [API & observability](docs/api.md) | Routes, error contracts, health checks, metrics, PromQL, and logging |
+| [Evaluation guide](docs/evaluation.md) | Scenario criteria, report semantics, and limitations |
+| [PostgreSQL & Render](docs/postgresql.md) | Database configuration, deployment, and safe testing |
+| [Local monitoring stack](observability/local/README.md) | Optional Prometheus/Grafana setup |
+| [Lint validation](docs/ruff-lint-validation.md) | Repository validation history |
+
+---
+
+## 🎯 Project Focus
+
+Sentinel explores how agentic engineering tools can combine:
+
+- Structured incident investigation
+- Controlled repository access
+- Policy-constrained patch application
+- Test-driven verification and bounded retries
+- Persistent execution history
+- API security and operational observability
+
+The emphasis is on **controlled execution, traceability, and verifiable outcomes**—not unrestricted autonomous code changes.

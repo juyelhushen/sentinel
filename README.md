@@ -184,8 +184,10 @@ uv run mypy src
 uv run pytest
 ```
 
-For the deterministic autonomous-repair evaluation scenarios, coverage map,
-pass criteria, and measurement guidance, see [the evaluation baseline](docs/evaluation.md).
+Run the deterministic autonomous-repair evaluation with
+`uv run python scripts/run_evaluation.py`. It writes timestamped JSON and
+Markdown reports under `data/evaluation-reports/`; see [the evaluation baseline](docs/evaluation.md)
+for scenario criteria and measurement semantics.
 
 The full suite also includes existing live Ollama tests; those require the
 configured provider. The existing CI selection is `uv run pytest -q -m 'not integration'`.

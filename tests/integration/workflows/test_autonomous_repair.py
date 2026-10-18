@@ -189,11 +189,29 @@ async def _tool_names(database: SQLiteDatabase) -> list[str]:
     return [row[0] for row in rows]
 
 
+def _record_evaluation_result(
+    request: pytest.FixtureRequest,
+    *,
+    outcome: str,
+    retry_count: int | None,
+    error_category: str | None = None,
+) -> None:
+    request.node.user_properties.extend(
+        [
+            ("evaluation_outcome", outcome),
+            ("retry_count", retry_count),
+        ]
+    )
+    if error_category is not None:
+        request.node.user_properties.append(("error_category", error_category))
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_autonomous_repair_fixes_broken_repository(
     sample_repository: Path,
     database: SQLiteDatabase,
+    request: pytest.FixtureRequest,
 ) -> None:
     application, provider = _application(
         sample_repository,
@@ -236,12 +254,18 @@ async def test_autonomous_repair_fixes_broken_repository(
     assert "return a + b" in (sample_repository / "calculator.py").read_text(
         encoding="utf-8"
     )
+    _record_evaluation_result(
+        request,
+        outcome="repair_verified_and_persisted",
+        retry_count=len(attempts) - 1,
+    )
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_investigation_findings_match_calculator_facts_without_repair(
     sample_repository: Path,
+    request: pytest.FixtureRequest,
 ) -> None:
     application = create_sentinel_application(
         llm_provider=DeterministicLLMProvider([]),
@@ -271,6 +295,11 @@ async def test_investigation_findings_match_calculator_facts_without_repair(
     assert result["repair_enabled"] is False
     assert result.get("repair_plan") is None
     assert result.get("verification") is None
+    _record_evaluation_result(
+        request,
+        outcome="facts_confirmed",
+        retry_count=None,
+    )
 
 
 @pytest.mark.integration
@@ -278,6 +307,7 @@ async def test_investigation_findings_match_calculator_facts_without_repair(
 async def test_autonomous_repair_retries_after_failed_verification(
     sample_repository: Path,
     database: SQLiteDatabase,
+    request: pytest.FixtureRequest,
 ) -> None:
     application, provider = _application(
         sample_repository,
@@ -323,6 +353,11 @@ async def test_autonomous_repair_retries_after_failed_verification(
     assert "return a + b" in (sample_repository / "calculator.py").read_text(
         encoding="utf-8"
     )
+    _record_evaluation_result(
+        request,
+        outcome="repaired_after_verification_retry",
+        retry_count=len(attempts) - 1,
+    )
 
 
 @pytest.mark.integration
@@ -330,6 +365,7 @@ async def test_autonomous_repair_retries_after_failed_verification(
 async def test_rejected_repair_does_not_modify_repository(
     sample_repository: Path,
     database: SQLiteDatabase,
+    request: pytest.FixtureRequest,
 ) -> None:
     original = (sample_repository / "calculator.py").read_text(encoding="utf-8")
     approval_gate = FixedApprovalGate(
@@ -364,6 +400,11 @@ async def test_rejected_repair_does_not_modify_repository(
     assert attempts[0].execution_error == "Rejected by test policy."
     assert "apply_patch" not in tool_names
     assert (sample_repository / "calculator.py").read_text(encoding="utf-8") == original
+    _record_evaluation_result(
+        request,
+        outcome="approval_rejected_without_mutation",
+        retry_count=len(attempts) - 1,
+    )
 
 
 @pytest.mark.integration
@@ -371,6 +412,7 @@ async def test_rejected_repair_does_not_modify_repository(
 async def test_autonomous_repair_stops_after_retry_limit(
     sample_repository: Path,
     database: SQLiteDatabase,
+    request: pytest.FixtureRequest,
 ) -> None:
     application, provider = _application(
         sample_repository,
@@ -418,6 +460,11 @@ async def test_autonomous_repair_stops_after_retry_limit(
     assert persisted_execution.completed_at is not None
     assert persisted_incident is not None
     assert persisted_incident.status == IncidentStatus.FAILED
+    _record_evaluation_result(
+        request,
+        outcome="retry_exhausted_and_failure_persisted",
+        retry_count=len(attempts) - 1,
+    )
 
 
 @pytest.mark.integration
@@ -425,6 +472,7 @@ async def test_autonomous_repair_stops_after_retry_limit(
 async def test_invalid_repair_proposal_fails_through_investigation_service(
     sample_repository: Path,
     database: SQLiteDatabase,
+    request: pytest.FixtureRequest,
 ) -> None:
     original = (sample_repository / "calculator.py").read_text(encoding="utf-8")
     invalid_proposal = {
@@ -465,6 +513,9 @@ async def test_invalid_repair_proposal_fails_through_investigation_service(
 
     persisted_incident = await incident_repository.get_by_id(incident.id)
     executions = await execution_repository.get_by_incident_id(incident.id)
+    repair_attempts = await SQLiteRepairRepository(database).get_attempts(
+        executions[0].id
+    )
     assert len(provider.repair_requests) == 1
     assert persisted_incident is not None
     assert persisted_incident.status == IncidentStatus.FAILED
@@ -472,9 +523,15 @@ async def test_invalid_repair_proposal_fails_through_investigation_service(
     assert executions[0].status == ExecutionStatus.FAILED
     assert executions[0].started_at is not None
     assert executions[0].completed_at is not None
-    assert await SQLiteRepairRepository(database).get_attempts(executions[0].id) == []
+    assert repair_attempts == []
     assert "apply_patch" not in await _tool_names(database)
     assert (sample_repository / "calculator.py").read_text(encoding="utf-8") == original
+    _record_evaluation_result(
+        request,
+        outcome="invalid_proposal_safely_rejected",
+        retry_count=len(provider.repair_requests) - 1,
+        error_category="repair_parse_error",
+    )
 
 
 @pytest.mark.integration

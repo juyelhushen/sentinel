@@ -234,8 +234,10 @@ Standardized API errors include a stable error code and request ID. The request 
 
 **Deployment**
 - The API is deployed on Render.
-- The release workflow is triggered by version tags matching `v*`.
-- The workflow runs formatting, lint, type checks, and its configured non-integration test selection before invoking the configured Render deployment hook.
+- The release workflow runs only for pushed tags. It accepts stable `vMAJOR.MINOR.PATCH` tags without leading zeroes, requires the tagged commit to be reachable from `main`, and checks the tag against the project and package versions.
+- After formatting, lint, type checks, and the non-integration test selection pass, the workflow validates Render configuration before invoking the deploy hook. It verifies the deployment commit reaches `live`, then checks the public `/health` and `/health/ready` responses.
+- For a queued Render `202` response, Render does not return a request-specific deployment ID. The workflow matches a new deploy-hook deployment for the same service and commit created after the request; a concurrent hook for that same commit cannot be attributed uniquely.
+- Configure `RENDER_DEPLOY_HOOK_URL` and `RENDER_API_KEY` as GitHub Actions secrets, and `RENDER_SERVICE_ID` as a repository variable or secret. The workflow fails before triggering a deployment if any required value or API preflight is unavailable.
 - Deployment does not enable the internal repair workflow.
 
 Keep API keys and database credentials in local ignored configuration or a deployment secret manager. Never commit secrets or use production credentials for a portfolio rehearsal.

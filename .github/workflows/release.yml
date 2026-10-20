@@ -16,13 +16,14 @@ jobs:
   quality-and-deploy:
     name: Quality Checks and Render Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out tagged commit
         uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
@@ -36,35 +37,41 @@ jobs:
         run: uv sync --locked --dev
 
       - name: Check formatting
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check src tests scripts/release_guard.py
 
       - name: Lint
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests scripts/release_guard.py
 
       - name: Type check
-        run: uv run mypy src
+        run: uv run mypy src scripts/release_guard.py
 
       - name: Run tests
         run: uv run pytest -q -m "not integration"
 
-      - name: Trigger Render deployment
+      - name: Validate release tag and version
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+
+          uv run python scripts/release_guard.py validate-ancestry
+          uv run python scripts/release_guard.py validate
+          uv run pytest -q tests/unit/test_api.py::test_project_and_api_versions_match_package_version
+
+      - name: Validate Render deployment configuration
+        id: render_preflight
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID }}
+        run: uv run python scripts/release_guard.py preflight
+
+      - name: Trigger and verify Render deployment
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         env:
           GITHUB_SHA: ${{ github.sha }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          if [[ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]]; then
-            echo "::error::RENDER_DEPLOY_HOOK_URL secret is not configured."
-            exit 1
-          fi
-
-          separator='?'
-          if [[ "$RENDER_DEPLOY_HOOK_URL" == *\?* ]]; then
-            separator='&'
-          fi
-          deploy_url="${RENDER_DEPLOY_HOOK_URL}${separator}ref=${GITHUB_SHA}"
-
-          if ! curl --fail --silent --max-time 30 --output /dev/null \
-            --request POST "$deploy_url"; then
-            echo "::error::Render deployment trigger failed or timed out."
-            exit 1
-          fi
+          RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID }}
+          RENDER_BASELINE_DEPLOY_IDS: ${{ steps.render_preflight.outputs.baseline_deploy_ids }}
+        run: uv run python scripts/release_guard.py deploy

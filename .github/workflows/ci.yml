@@ -35,13 +35,13 @@ jobs:
         run: uv sync --locked --dev
 
       - name: Check formatting
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check src tests scripts/release_guard.py
 
       - name: Lint
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests scripts/release_guard.py
 
       - name: Type check
-        run: uv run mypy src
+        run: uv run mypy src scripts/release_guard.py
 
       - name: Run tests
         run: uv run pytest -q -m "not integration"

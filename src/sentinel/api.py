@@ -19,6 +19,7 @@ from psycopg import Error as PostgreSQLError
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from sentinel import __version__
 from sentinel.application.ports.rate_limiter import RateLimitStore
 from sentinel.application.use_cases.create_incident import (
     CreateIncidentCommand,
@@ -370,7 +371,7 @@ configure_logging()
 app = FastAPI(
     title="Sentinel",
     description="Autonomous Multi-Agent Engineering Ops Copilot",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
 

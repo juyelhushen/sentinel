@@ -1,3 +1,4 @@
+import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,13 +8,22 @@ import httpx
 import pytest
 from psycopg import OperationalError
 
-from sentinel import api
+from sentinel import __version__, api
 from sentinel.config.settings import Settings
 from sentinel.infrastructure.database.postgres import (
     DatabaseUnavailable,
     PostgreSQLDatabase,
 )
 from sentinel.llm.models import LLMResponse
+
+
+def test_project_and_api_versions_match_package_version() -> None:
+    project_metadata = tomllib.loads(
+        (Path(__file__).parents[2] / "pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    assert project_metadata["project"]["version"] == __version__
+    assert api.app.version == __version__
 
 
 @pytest.fixture
